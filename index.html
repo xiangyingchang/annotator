@@ -1,0 +1,3583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>标注与修订 · Annotator</title>
+<link rel="preconnect" href="https://rsms.me">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  /* Surface · 校样纸（避开 cream AI 默认；偏纸张感、warm off-white） */
+  --bg: #fbfaf7;
+  --bg-elev: #ffffff;
+  --bg-hover: #f4f0e8;
+  --bg-code: #f4f0e8;
+  --bg-soft: #f7f4ed;       /* sidebar 折叠态底色，warm 一档 */
+
+  /* Border · warm gray 家族（跟 surface 同一 hue） */
+  --border: #e7e2d8;
+  --border-strong: #d6cfc2;
+
+  /* Ink */
+  --text: #18181b;
+  --text-muted: #6b6b6b;
+  --text-subtle: #9a968a;
+
+  /* Signature accent · 焦糖棕（"校样红笔/批注蜡笔"—— subject 自身的词汇） */
+  --accent: #b45309;
+  --accent-hover: #92400e;
+  --accent-soft: #fde68a;   /* 暖琥珀，用于序号背景、hover 提示 */
+  --accent-bg: #fef3c7;     /* 淡焦糖底色 */
+
+  /* 状态色 · 降饱和（避开 5 色均匀饱和的 AI Slop） */
+  --warning: #d97706;       /* 深一档 amber */
+  --warning-bg: #fef3c7;
+  --success: #4d7c0f;       /* 鼠尾草绿，比 emerald 暗一档 */
+  --success-bg: #ecfccb;
+  --danger: #b91c1c;        /* 深一档红 */
+  --danger-bg: #fee2e2;
+
+  /* 标注高亮（暖琥珀色家族，跟 accent 同 hue） */
+  --highlight: #fde68a;
+  --highlight-active: #fcd34d;
+
+  /* 5 种 annotation 类型的弱化色（去饱和，hierarchy 让位给 accent） */
+  --type-comment-bg: #f5efe3;  --type-comment-fg: #78716c;
+  --type-replace-bg: #e6e9ec;  --type-replace-fg: #52525b;
+  --type-delete-bg: #f3e4e1;   --type-delete-fg: #92400e;
+  --type-insert-bg: #e6e9db;   --type-insert-fg: #4d7c0f;
+  --type-mark-bg: #ebe7e1;     --type-mark-fg: #6b6b6b;
+  --type-question-bg: #ebe6e1; --type-question-fg: #57534e;
+
+  --shadow-sm: 0 1px 2px rgba(60, 40, 0, 0.06);
+  --shadow: 0 6px 24px rgba(60, 40, 0, 0.08);
+  --radius: 6px;
+  --radius-lg: 10px;
+
+  /* 字体 token */
+  --font-sans: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  overflow: hidden;
+}
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";  /* Inter 开启 alt 字符 */
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  flex-shrink: 0;
+  height: 52px;
+}
+header h1 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+header .header-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+header .actions {
+  display: flex;
+  gap: 6px;
+}
+
+button {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elev);
+  color: var(--text);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+button:hover { background: var(--bg-hover); border-color: var(--text-muted); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+button.ghost { border-color: transparent; background: transparent; }
+button.ghost:hover { background: var(--bg-hover); }
+button.danger { color: var(--danger); }
+button.danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+button.success { color: var(--success); border-color: #bef264; background: var(--success-bg); }
+button.success:hover { background: #ecfccb; border-color: var(--success); }
+
+/* Main layout */
+main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+.content-area {
+  order: 1;  /* 主体在左 */
+  flex: 1;
+  min-width: 0;
+  position: relative;  /* 让 .mark-toolbar-floating 相对 content-area 定位 */
+}
+.sidebar {
+  width: 360px;
+  background: var(--bg-elev);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  order: 2;  /* 移到右侧 —— 像在文档右边缘贴便签 */
+  transition: width 0.22s ease, border-color 0.22s ease;
+  overflow: hidden;
+  position: relative;
+}
+.sidebar.collapsed {
+  width: 52px;
+  background: var(--bg-soft);
+}
+.sidebar.collapsed .sidebar-header-label,
+.sidebar.collapsed .sidebar-tabs,
+.sidebar.collapsed .tab-pane,
+.sidebar.collapsed .ai-input-area { display: none; }
+.sidebar.collapsed .sidebar-toggle { transform: rotate(180deg); }
+.sidebar.collapsed::after {
+  /* 折叠态显示紧凑的序号列表（CSS-only 简版：vertical writing） */
+  content: "";
+}
+.sidebar-toggle {
+  width: 26px; height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev);
+  border-radius: 4px;
+  transition: transform 0.22s ease;
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover { background: var(--bg-hover); }
+
+.sidebar-header {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sidebar-header span.meta { font-size: 11px; color: var(--text-muted); font-weight: normal; }
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  flex-shrink: 0;
+}
+.sidebar-tabs button {
+  flex: 1;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.sidebar-tabs button:hover { background: var(--bg-hover); border-color: transparent; }
+.sidebar-tabs button.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tab-pane {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+/* Annotation items */
+.annotation-item {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);   /* ★ signature element：便签感左边粗线 */
+  border-radius: var(--radius);
+  padding: 10px 12px 10px 13px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s, transform 0.1s;
+}
+.annotation-item:hover {
+  border-color: var(--border-strong);
+  border-left-color: var(--accent-hover);
+  box-shadow: var(--shadow-sm);
+}
+.annotation-item.active {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+  box-shadow: var(--shadow-sm);
+}
+.annotation-item.resolved {
+  opacity: 0.62;
+  background: var(--bg-soft);
+  border-left-color: var(--success);
+}
+.annotation-item.resolved .ann-order { background: var(--success); }
+
+.ann-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.ann-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  background: var(--accent);
+  color: white;
+  border-radius: 11px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.ann-type {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.ann-type-comment  { background: var(--type-comment-bg);  color: var(--type-comment-fg); }
+.ann-type-replace  { background: var(--type-replace-bg);  color: var(--type-replace-fg); }
+.ann-type-delete   { background: var(--type-delete-bg);   color: var(--type-delete-fg); }
+.ann-type-insert   { background: var(--type-insert-bg);   color: var(--type-insert-fg); }
+.ann-type-mark     { background: var(--type-mark-bg);     color: var(--type-mark-fg); }
+.ann-type-question { background: var(--type-question-bg); color: var(--type-question-fg); }
+
+.ann-text {
+  background: var(--bg-hover);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin: 6px 0 4px 0;
+  border-left: 3px solid var(--border-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ann-text.type-replace  { border-left-color: var(--accent); }
+.ann-text.type-delete   { border-left-color: var(--danger); text-decoration: line-through; opacity: 0.8; }
+.ann-text.type-insert   { border-left-color: var(--success); }
+.ann-text.type-question { border-left-color: var(--text-muted); }
+
+.ann-proposed {
+  background: var(--success-bg);
+  border-left: 3px solid var(--success);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 4px 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+}
+.ann-proposed.prefix-insert::before { content: "+ "; color: var(--success); font-weight: 600; }
+.ann-proposed.prefix-replace::before { content: "→ "; color: var(--accent); font-weight: 600; }
+
+.ann-comment {
+  font-size: 13px;
+  color: var(--text);
+  margin: 6px 0 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.55;
+}
+.ann-question {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 4px 0 0 0;
+  padding-left: 8px;
+  border-left: 2px solid var(--text-subtle);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ann-response {
+  font-size: 12px;
+  color: var(--success);
+  background: var(--success-bg);
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-top: 6px;
+  border-left: 3px solid var(--success);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: var(--font-sans);
+}
+.ann-verify {
+  font-size: 11px;
+  color: #0e7490;
+  background: #ecfeff;
+  padding: 5px 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  border-left: 3px solid #06b6d4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ann-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.ann-actions button {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+.empty-state-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+/* Workspace pane */
+.workspace-status {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.workspace-status .ws-path {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.workspace-status button { font-size: 11px; padding: 3px 8px; }
+.workspace-toolbar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.workspace-unsupported {
+  background: var(--warning-bg);
+  border: 1px solid #fde68a;
+  border-radius: var(--radius);
+  padding: 14px;
+  font-size: 12px;
+  color: #92400e;
+  line-height: 1.7;
+}
+.workspace-unsupported code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.file-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  max-height: 400px;
+  overflow-y: auto;
+}
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.file-item:last-child { border-bottom: none; }
+.file-item:hover { background: var(--bg-hover); }
+.file-item .file-icon { font-size: 16px; }
+.file-item .file-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-item .file-type {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--bg-code);
+  border-radius: 3px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.file-item .file-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* History list (multiple sessions) */
+.history-list {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.history-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  margin-bottom: 8px;
+  transition: border-color 0.15s, background 0.15s;
+}
+.history-item:hover {
+  border-color: var(--accent);
+  background: var(--bg-elevated);
+}
+.history-item.is-current {
+  border-color: var(--accent);
+  background: rgba(180, 83, 9, 0.04);
+}
+.history-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.history-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.history-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.history-type {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text);
+}
+.history-dot { color: var(--text-muted); }
+.current-badge {
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+}
+.history-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+}
+.history-actions .history-open {
+  font-size: 12px;
+  padding: 5px 12px;
+}
+.history-actions .history-delete {
+  font-size: 18px;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: var(--text-muted);
+}
+.history-actions .history-delete:hover {
+  background: var(--danger);
+  color: white;
+  border-color: var(--danger);
+}
+
+.save-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: var(--success-bg);
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #065f46;
+  cursor: help;
+  font-variant-numeric: tabular-nums;
+}
+.save-indicator.warn {
+  background: var(--warning-bg);
+  border-color: #fde68a;
+  color: #92400e;
+}
+.save-indicator .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--success);
+}
+.save-indicator.warn .dot { background: var(--warning); }
+
+.source-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  height: 36px;
+}
+.source-bar .source-label {
+  font-weight: 600;
+  color: var(--text);
+}
+.source-bar .source-meta {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.source-bar .nav-btn {
+  width: 28px; height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.source-bar .mark-btn {
+  height: 28px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+.source-bar .mark-cursor-hint {
+  font-size: 11px;
+  color: var(--accent);
+  margin-left: 4px;
+  font-weight: 500;
+}
+
+/* Floating mark toolbar —— 屏幕底部居中，类似 Linear command bar */
+.mark-toolbar-floating {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  z-index: 50;
+  font-size: 13px;
+  animation: markBarIn 0.18s ease-out;
+}
+@keyframes markBarIn {
+  from { transform: translateX(-50%) translateY(8px); opacity: 0; }
+  to   { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+.mark-toolbar-floating .mark-btn {
+  height: 30px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 999px;
+}
+.mark-toolbar-floating .mark-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+.mark-toolbar-floating .mark-btn.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.mark-toolbar-floating .mark-cursor-hint {
+  font-size: 12px;
+  color: var(--accent);
+  padding: 0 10px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.mark-toolbar-floating .mark-cursor-hint:empty {
+  display: none;
+}
+.mark-toolbar-floating .mark-close-btn {
+  display: none;
+}
+.mark-toolbar-floating.is-active .mark-close-btn {
+  display: inline-flex;
+}
+.mark-toolbar-floating .mark-cursor-hint:empty + .mark-close-btn {
+  margin-left: 0;
+}
+
+.mark-overlay {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+.content-iframe {
+  width: 100%;
+  min-height: calc(100vh - 80px);
+  border: none;
+  display: block;
+  background: white;
+}
+.mark-overlay.tool-active {
+  pointer-events: auto;
+  cursor: crosshair;
+}
+.mark-overlay svg {
+  width: 100%; height: 100%;
+  display: block;
+  overflow: visible;
+}
+.mark-overlay svg .mark-shape {
+  fill: rgba(255, 87, 34, 0.08);
+  stroke: #ff5722;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.mark-overlay svg .mark-shape.completed {
+  fill: rgba(76, 175, 80, 0.08);
+  stroke: #4caf50;
+}
+.mark-overlay svg .mark-shape.flash {
+  stroke-width: 4;
+  filter: drop-shadow(0 0 6px #ff5722);
+}
+.mark-overlay svg .mark-arrow {
+  stroke: #ff5722;
+  stroke-width: 2;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+.mark-overlay svg .mark-arrow.completed {
+  stroke: #4caf50;
+}
+.mark-overlay svg .mark-draft {
+  fill: rgba(255, 87, 34, 0.15);
+  stroke: #ff5722;
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+  vector-effect: non-scaling-stroke;
+}
+.mark-overlay svg .mark-num {
+  fill: #ff5722;
+  font-size: 14px;
+  font-weight: 600;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3;
+}
+
+.content-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 40px 60px;
+}
+.content-render {
+  max-width: 820px;
+  margin: 0 auto;
+  background: var(--bg-elev);
+  padding: 32px 44px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border);
+  line-height: 1.8;
+  font-size: 15px;
+  color: var(--text);
+}
+.content-render > *:first-child { margin-top: 0; }
+.content-render > *:last-child { margin-bottom: 0; }
+.content-render h1, .content-render h2, .content-render h3, .content-render h4 {
+  margin-top: 1.4em;
+  margin-bottom: 0.5em;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.content-render h1 { font-size: 1.6em; border-bottom: 1px solid var(--border); padding-bottom: 0.3em; }
+.content-render h2 { font-size: 1.3em; }
+.content-render h3 { font-size: 1.1em; }
+.content-render p { margin: 0.8em 0; }
+.content-render pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  overflow-x: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  margin: 1em 0;
+}
+.content-render code {
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.88em;
+  font-family: var(--font-mono);
+}
+.content-render pre code { background: none; padding: 0; color: inherit; }
+.content-render table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
+  font-size: 0.95em;
+}
+.content-render th, .content-render td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+.content-render th { background: var(--bg-hover); font-weight: 600; }
+.content-render blockquote {
+  border-left: 3px solid var(--border-strong);
+  padding: 4px 0 4px 14px;
+  color: var(--text-muted);
+  margin: 1em 0;
+  font-style: italic;
+}
+.content-render ul, .content-render ol { padding-left: 1.6em; }
+.content-render li { margin: 0.2em 0; }
+.content-render a { color: var(--accent); text-decoration: none; }
+.content-render a:hover { text-decoration: underline; }
+.content-render hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.5em 0;
+}
+
+.content-render mark.highlight {
+  background: var(--highlight);
+  padding: 1px 0;
+  border-radius: 2px;
+  color: inherit;
+  position: relative;
+  cursor: help;
+  /* 左侧色条 + 编号，让用户一眼看清已标位置，避免重复标 */
+  box-shadow: inset 3px 0 0 var(--warning);
+  padding-left: 4px;
+}
+.content-render mark.highlight:hover::after {
+  content: "#" attr(data-order) " · 标注";
+  position: absolute;
+  left: 0;
+  top: -22px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+  font-family: var(--font-mono);
+}
+.content-render mark.highlight-active {
+  background: var(--highlight-active);
+  box-shadow: 0 0 0 2px var(--warning);
+  color: inherit;
+}
+@keyframes flash {
+  0% { background: var(--highlight-active); box-shadow: 0 0 0 4px var(--warning); }
+  100% { background: var(--highlight); box-shadow: 0 0 0 2px transparent; }
+}
+.content-render mark.flash {
+  animation: flash 1.6s ease-out;
+  color: inherit;
+}
+
+/* Tooltip */
+.tooltip {
+  position: fixed;
+  background: #1a1a1a;
+  color: white;
+  border-radius: var(--radius);
+  padding: 4px;
+  display: flex;
+  gap: 2px;
+  box-shadow: var(--shadow);
+  z-index: 1000;
+  font-size: 12px;
+  transform: translateX(-50%);
+}
+.tooltip button {
+  background: transparent;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.tooltip button:hover { background: rgba(255, 255, 255, 0.15); }
+.tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1a1a1a;
+}
+
+/* Modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  background: var(--bg-elev);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 580px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.2s ease-out;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.modal-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.modal-close {
+  width: 28px; height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: none;
+  background: transparent;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-group:last-child { margin-bottom: 0; }
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.form-group input[type="text"],
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg-elev);
+  color: var(--text);
+  resize: vertical;
+  line-height: 1.5;
+}
+.form-group textarea { min-height: 70px; }
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.12);
+}
+.form-group .quote {
+  background: var(--bg-hover);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 100px;
+  overflow-y: auto;
+  border-left: 3px solid var(--border-strong);
+}
+.form-group .quote.empty { color: var(--text-subtle); font-style: italic; }
+
+.radio-group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.radio-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--text);
+  margin: 0;
+  user-select: none;
+  transition: all 0.15s;
+}
+.radio-group label:hover { background: var(--bg-hover); }
+.radio-group input { display: none; }
+.radio-group label.checked {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+.radio-group label .type-desc {
+  font-size: 11px;
+  color: var(--text-subtle);
+  margin-left: 2px;
+}
+
+/* Welcome */
+.welcome {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  background: var(--bg);
+  overflow-y: auto;
+}
+.welcome-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  max-width: 600px;
+  width: 100%;
+  box-shadow: var(--shadow-sm);
+}
+.welcome-card h2 {
+  margin: 0 0 6px 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+.welcome-card p.lead {
+  color: var(--text-muted);
+  margin: 0 0 24px 0;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.welcome-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+}
+.welcome-tabs button {
+  flex: 1;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  padding: 10px 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.welcome-tabs button:hover { color: var(--text); }
+.welcome-tabs button.active {
+  border-bottom-color: var(--accent);
+  color: var(--accent);
+  font-weight: 500;
+}
+.welcome-pane { animation: fadeIn 0.2s; }
+
+.welcome-textarea {
+  width: 100%;
+  height: 200px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  resize: vertical;
+  line-height: 1.6;
+  background: var(--bg-elev);
+  color: var(--text);
+}
+.welcome-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(180, 83, 9, 0.12);
+}
+.welcome-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 8px 0 12px 0;
+  line-height: 1.6;
+}
+.welcome-hint code {
+  background: var(--bg-code);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.welcome-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.welcome-dragover {
+  border: 2px dashed var(--accent);
+  background: var(--accent-bg);
+}
+
+.hidden { display: none !important; }
+
+/* Export preview */
+.export-preview {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 16px;
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 50vh;
+  overflow-y: auto;
+  line-height: 1.65;
+}
+
+/* AI panel */
+.ai-input-area {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+.ai-input-area textarea {
+  width: 100%;
+  height: 120px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+  background: var(--bg-elev);
+  line-height: 1.5;
+}
+.ai-input-area textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.ai-history {
+  padding: 10px 12px;
+}
+.ai-history-item {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.ai-history-item .meta {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+.ai-history-item .preview {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 100px;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.match-summary {
+  background: var(--success-bg);
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  margin: 0 12px 8px 12px;
+  font-size: 12px;
+  color: #065f46;
+}
+.match-summary.warn {
+  background: var(--warning-bg);
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+/* Revisions */
+.revision-item {
+  background: var(--success-bg);
+  border: 1px solid #a7f3d0;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.revision-item .ann-order { background: var(--success); }
+.revision-item .meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.revision-item .summary {
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1a1a;
+  color: white;
+  padding: 10px 18px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+  z-index: 3000;
+  animation: toastIn 0.2s ease-out;
+}
+@keyframes toastIn {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* Drag-over indicator */
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(180, 83, 9, 0.08);
+  border: 3px dashed var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  pointer-events: none;
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  main { flex-direction: column; }
+  .sidebar { width: 100%; max-height: 45vh; border-right: none; border-bottom: 1px solid var(--border); }
+  .content-scroll { padding: 12px; }
+  .content-render { padding: 18px 20px; }
+  .radio-group label { font-size: 11px; padding: 5px 8px; }
+  .radio-group label .type-desc { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v2.6 · 校对纸风格</span></h1>
+    <div class="header-meta" id="headerMeta">未加载内容</div>
+    <div class="actions">
+      <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
+      <button id="btnNew" class="ghost" title="新建会话（不会删除历史）">新建</button>
+      <button id="btnImport" class="ghost" title="从 JSON 恢复">导入</button>
+      <button id="btnExportJson" class="ghost" title="保存为 JSON 备份">保存</button>
+      <button id="btnExport" class="primary" title="导出给 AI 的结构化报告">导出给 AI</button>
+    </div>
+    <input type="file" id="fileImport" accept="application/json,.json" class="hidden">
+  </header>
+
+  <main id="main">
+    <!-- Welcome -->
+    <div class="welcome" id="welcome">
+      <div class="welcome-card" id="welcomeCard">
+        <h2>开始一次标注会话</h2>
+        <p class="lead">
+          把 Markdown / HTML 内容粘贴到下方，或加载示例开始。选中文字即可加标注，标注会按顺序保留并可一键导出给 AI；AI 回应后可粘贴回来自动勾选完成。
+        </p>
+        <div class="welcome-tabs">
+          <button data-welcome-tab="md" class="active">粘贴 Markdown</button>
+          <button data-welcome-tab="html">粘贴 HTML</button>
+          <button data-welcome-tab="url">通过 URL</button>
+          <button data-welcome-tab="workspace">本地工作区</button>
+          <button data-welcome-tab="sample">加载示例</button>
+          <button data-welcome-tab="history">历史任务</button>
+        </div>
+
+        <div class="welcome-pane" data-welcome-pane="md">
+          <textarea id="mdInput" class="welcome-textarea" placeholder="# 标题&#10;&#10;在这里粘贴 Markdown 内容..."></textarea>
+          <div class="welcome-actions">
+            <button id="btnLoadMd" class="primary">加载并开始标注</button>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="html">
+          <textarea id="htmlInput" class="welcome-textarea" placeholder='<h1>标题</h1>&#10;<p>粘贴 HTML 源码...</p>'></textarea>
+          <div class="welcome-hint">提示：粘贴 HTML 源码（含标签），不是渲染后的页面。脚本不会被执行。</div>
+          <div class="welcome-actions">
+            <button id="btnLoadHtml" class="primary">加载并开始标注</button>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="url">
+          <input id="urlInput" type="text" class="welcome-textarea" style="height:auto;padding:10px 12px;" placeholder="https://example.com/page.html">
+          <div class="welcome-hint">
+            仅支持<strong>同源</strong>或开启了 <code>Access-Control-Allow-Origin</code> 的页面。如果加载失败，请在浏览器打开该页面后 <code>Ctrl+U</code>（查看源代码）→ <code>Ctrl+A</code> 全选 → 复制到「粘贴 HTML」标签页。
+          </div>
+          <div class="welcome-actions">
+            <button id="btnLoadUrl" class="primary">尝试加载</button>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="sample">
+          <p style="font-size:13px;color:var(--text-muted);margin:8px 0 14px 0;">
+            示例是一份产品需求文档片段（"智能书签功能 v1.2"），包含标题、列表、引用、加粗等常见结构，便于演示标注功能。
+          </p>
+          <div class="welcome-actions">
+            <button id="btnLoadSample" class="primary">加载示例</button>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="workspace">
+          <div id="workspaceContainer">
+            <div class="welcome-hint">
+              连接本地工作区后，工具会列出该目录下的 <code>.md</code> / <code>.html</code> / <code>.htm</code> / <code>.txt</code> 文件。点击文件名即可加载并开始标注。<br>
+              <span style="color:var(--text-subtle);">需要 Chrome 86+ / Edge 86+（支持 File System Access API）。授权一次后目录名会被记住，下次不用重选。</span>
+            </div>
+            <div class="workspace-toolbar">
+              <button id="btnPickDir" class="primary">📁 选择工作区目录</button>
+              <button id="btnRefreshFiles" class="ghost" disabled>🔄 刷新文件</button>
+              <button id="btnDisconnectWS" class="ghost" disabled>断开</button>
+            </div>
+            <div id="workspaceStatus" class="hidden"></div>
+            <div id="fileList" class="file-list hidden"></div>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="history">
+          <p style="font-size:13px;color:var(--text-muted);margin:8px 0 14px 0;">
+            这里是所有保存过的标注任务，按最近修改时间倒序。点"打开"继续标注，点"×"删除。
+          </p>
+          <div id="historyList" class="history-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar hidden" id="sidebar">
+      <div class="sidebar-header">
+        <span class="sidebar-header-label">标注列表 <span class="meta" id="annCount">0 条</span></span>
+        <button id="btnToggleSidebar" class="sidebar-toggle" title="折叠 / 展开侧栏">›</button>
+      </div>
+      <div class="sidebar-tabs">
+        <button data-tab="annotations" class="active">标注 (<span id="openCount">0</span>)</button>
+        <button data-tab="revisions">修订 (<span id="revCount">0</span>)</button>
+        <button data-tab="ai">AI 对话</button>
+      </div>
+
+      <div class="tab-pane" id="annotationList"></div>
+      <div class="tab-pane hidden" id="revisionList"></div>
+      <div class="hidden" id="aiPanel">
+        <div class="ai-input-area">
+          <textarea id="aiResponseInput" placeholder="把 AI 的回应整段粘贴到这里。识别 "标注 #N" 格式的引用可自动勾选完成。"></textarea>
+          <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
+            <button id="btnParseAI" class="primary" style="font-size:12px;">解析并勾选</button>
+          </div>
+        </div>
+        <div id="aiHistory" class="ai-history"></div>
+      </div>
+    </aside>
+
+    <!-- Content -->
+    <section class="content-area hidden" id="contentArea">
+      <div class="source-bar">
+        <span class="source-label" id="sourceLabel">来源</span>
+        <span class="source-meta" id="sourceMeta"></span>
+        <button id="btnPrev" class="nav-btn ghost" title="上一条标注 (Shift+↑)">↑</button>
+        <button id="btnNext" class="nav-btn ghost" title="下一条标注 (Shift+↓)">↓</button>
+        <button id="btnReorder" class="ghost" style="font-size:12px;padding:4px 10px;" title="整理编号（删除后重排）">重排</button>
+      </div>
+      <div class="content-scroll" id="contentScroll">
+        <div class="content-render" id="contentRender" style="position:relative;">
+          <div class="mark-overlay" id="markOverlay"></div>
+        </div>
+      </div>
+
+      <!-- Floating mark toolbar (rectangle / arrow) —— 常驻精简态：默认仅显示两个入口按钮 -->
+      <div class="mark-toolbar-floating" id="markToolbarFloating">
+        <button id="btnMarkRectFloat" class="mark-btn ghost" title="矩形圈选（拖拽画矩形）">▭ 矩形</button>
+        <button id="btnMarkArrowFloat" class="mark-btn ghost" title="箭头标注（拖拽画箭头）">↗ 箭头</button>
+        <span class="mark-cursor-hint" id="markHintFloat"></span>
+        <button id="btnMarkClose" class="mark-btn ghost mark-close-btn" title="关闭圈选模式 (Esc)">✕</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Tooltip -->
+<div class="tooltip hidden" id="tooltip">
+  <button id="btnAddAnn">+ 标注选区</button>
+</div>
+
+<!-- Annotation modal -->
+<div class="modal-backdrop hidden" id="annModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modalTitle">新建标注</h3>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>类型</label>
+        <div class="radio-group" id="typeRadio">
+          <label data-value="comment"><input type="radio" name="annType" value="comment" checked><span>批注</span></label>
+          <label data-value="replace"><input type="radio" name="annType" value="replace"><span>替换</span></label>
+          <label data-value="delete"><input type="radio" name="annType" value="delete"><span>删除</span></label>
+          <label data-value="insert"><input type="radio" name="annType" value="insert"><span>插入</span></label>
+          <label data-value="mark"><input type="radio" name="annType" value="mark"><span>圈选</span></label>
+          <label data-value="question"><input type="radio" name="annType" value="question"><span>提问 AI</span></label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>选中文本</label>
+        <div class="quote" id="quoteText"></div>
+      </div>
+      <div class="form-group" id="proposedGroup">
+        <label id="proposedLabel">建议替换为</label>
+        <textarea id="proposedText" placeholder="输入新文本..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>说明 / 评论</label>
+        <textarea id="annComment" placeholder="说明修改原因、要求、补充信息..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>给 AI 的具体问题（可选）</label>
+        <textarea id="aiQuestion" placeholder="针对本条标注想要 AI 回答什么...（例如：建议的替代措辞？是否需要补充数据？）"></textarea>
+      </div>
+      <div class="form-group">
+        <label>如何验证修改已完成 <span style="color:var(--text-muted);font-weight:normal;font-size:11px;">（可选 · AI 回应时也会被要求回答）</span></label>
+        <textarea id="annVerify" placeholder="例如：1) 词频扫描不出现"引擎"  2) 与第 3 条标注措辞保持一致  3) 改完后能直接复述给非技术同事听"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="modalCancel" class="ghost">取消</button>
+      <button id="modalDelete" class="danger hidden">删除</button>
+      <button id="modalSave" class="primary">保存标注</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm modal (used by "新建" button) -->
+<div class="modal-backdrop hidden" id="confirmModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-header">
+      <h3 id="confirmTitle">确认操作</h3>
+    </div>
+    <div class="modal-body">
+      <p id="confirmMessage" style="margin:0 0 8px 0;line-height:1.7;font-size:14px;"></p>
+      <p id="confirmHint" style="margin:8px 0 0 0;font-size:12px;color:var(--text-muted);"></p>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;padding:14px 18px;border-top:1px solid var(--border);">
+      <button class="ghost" id="confirmCancel">取消</button>
+      <button class="primary" id="confirmOk">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div class="modal-backdrop hidden" id="exportModal">
+  <div class="modal" style="max-width:760px;">
+    <div class="modal-header">
+      <h3>导出给 AI</h3>
+      <button class="modal-close" id="exportClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px 0;line-height:1.7;">
+        把下方内容复制发给 AI。AI 按编号回应后，把回应整段粘贴到右侧「AI 对话」面板可自动勾选完成。建议 AI 的回应格式：<br>
+        <code style="background:var(--bg-code);padding:2px 6px;border-radius:3px;font-size:11px;">标注 #1：已修改 → 改成 XXX</code>
+      </p>
+      <div class="export-preview" id="exportPreview"></div>
+    </div>
+    <div class="modal-footer">
+      <button id="btnDownloadExport" class="ghost">下载 .md</button>
+      <button id="btnCopyExport" class="primary">复制到剪贴板</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   Annotator - browser-only annotation & revision tool
+   Single-file, no dependencies, localStorage persistence
+   ============================================================ */
+
+const STORAGE_KEY = "wb-annotator-v1";      // 旧版单 session key，仅作迁移用
+const SESSIONS_KEY = "wb-annotator-sessions"; // 新版 session list
+const CURRENT_KEY = "wb-annotator-current";   // 当前打开的 session id
+const SIDEBAR_KEY = "wb-annotator-sidebar";   // 侧栏折叠状态 "open" | "closed"
+
+function loadAllSessions() {
+  try {
+    const raw = localStorage.getItem(SESSIONS_KEY);
+    if (raw) {
+      const list = JSON.parse(raw);
+      return Array.isArray(list) ? list : [];
+    }
+    // 兼容旧版 wb-annotator-v1：迁移到 list
+    const old = localStorage.getItem(STORAGE_KEY);
+    if (old) {
+      const sess = JSON.parse(old);
+      const list = (sess && sess.source) ? [sess] : [];
+      try {
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+        if (sess && sess.id) localStorage.setItem(CURRENT_KEY, sess.id);
+        localStorage.removeItem(STORAGE_KEY);
+      } catch (e) { /* 写不进去也无所谓，下次再迁 */ }
+      return list;
+    }
+    return [];
+  } catch (e) {
+    console.error("loadAllSessions failed", e);
+    return [];
+  }
+}
+
+function saveAllSessions(list) {
+  try {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.error("saveAllSessions failed", e);
+    toast("保存失败：" + e.message, 3000);
+  }
+}
+
+function setCurrentSessionId(id) {
+  try {
+    if (id) localStorage.setItem(CURRENT_KEY, id);
+    else localStorage.removeItem(CURRENT_KEY);
+  } catch (e) { /* 写不进去也无所谓 */ }
+}
+
+function getCurrentSessionId() {
+  try { return localStorage.getItem(CURRENT_KEY) || null; }
+  catch (e) { return null; }
+}
+
+const TYPES = {
+  comment:  { label: "批注",   desc: "对选区添加说明" },
+  replace:  { label: "替换",   desc: "把选区改成新文本" },
+  delete:   { label: "删除",   desc: "删除选区" },
+  insert:   { label: "插入",   desc: "在选区后插入新内容" },
+  mark:     { label: "圈选",   desc: "用矩形或箭头圈出区域" },
+  question: { label: "提问 AI", desc: "向 AI 提问" }
+};
+
+const App = {
+  session: null,
+  currentSelection: null,
+  editingId: null,
+  activeTab: "annotations",
+  activeAnnId: null,
+  annCounter: 0,
+  workspaceHandle: null,
+  workspaceName: "",
+  workspaceFiles: [],
+  lastSaveTime: 0,
+  lastBackupTime: 0
+};
+
+/* ---------- Utilities ---------- */
+const $ = sel => document.querySelector(sel);
+const $$ = sel => Array.from(document.querySelectorAll(sel));
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function truncate(s, n) {
+  if (!s) return "";
+  return s.length > n ? s.slice(0, n) + "…" : s;
+}
+
+// 根据视口像素坐标反查 contentRender 内最近的文字片段（mark 锚点用）
+// 主路径：caretRangeFromPoint 拿到精确字符位置 → 所属块级元素 → 以该字符为中心抽 3-5 字
+// 降级：elementsFromPoint 找最近有 textContent 的元素，截前 8 字
+function pickTextFromPoint(px, py) {
+  const container = $("#contentRender");
+  if (!container) return "";
+  const trimAnchor = (s) => s.replace(/^[\s，。、,.：:；;「」『』""''《》()\[\]{}]+/, "")
+                             .replace(/[\s，。、,.：:；;「」『』""''《》()\[\]{}]+$/, "")
+                             .slice(0, 8);
+
+  // 主路径
+  let range = null;
+  if (document.caretRangeFromPoint) {
+    range = document.caretRangeFromPoint(px, py);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(px, py);
+    if (pos) range = pos.getRange();
+  }
+  if (range) {
+    const node = range.startContainer;
+    if (node && node.nodeType === 3 && node.textContent) {
+      const block = node.parentElement && node.parentElement.closest(
+        "p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th, dt, dd, pre, figcaption"
+      );
+      if (block) {
+        const fullText = (block.textContent || "").replace(/\s+/g, " ").trim();
+        if (fullText.length >= 2) {
+          // 算 node 在 block.textContent 里的起始偏移
+          let nodeStart = 0;
+          const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, null);
+          let cur;
+          while ((cur = walker.nextNode())) {
+            if (cur === node) break;
+            nodeStart += (cur.textContent || "").length;
+          }
+          const offsetInBlock = nodeStart + range.startOffset;
+          // 以端点为中心抽 3-5 字
+          const radius = 3;
+          const start = Math.max(0, offsetInBlock - radius);
+          const end = Math.min(fullText.length, start + 8);
+          return trimAnchor(fullText.slice(start, end));
+        }
+      }
+    }
+  }
+  // 降级
+  const stack = document.elementsFromPoint(px, py);
+  for (const el of stack) {
+    if (el.closest && el.closest("#markOverlay")) continue;
+    if (!container.contains(el)) continue;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (text.length >= 2) return trimAnchor(text);
+  }
+  return "";
+}
+
+function toast(msg, duration = 1800) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = "0"; t.style.transition = "opacity 0.3s"; }, duration - 300);
+  setTimeout(() => t.remove(), duration);
+}
+
+/* ---------- Markdown -> HTML (simple, no deps) ---------- */
+function md2html(md) {
+  if (!md) return "";
+  // Pre-extract fenced code blocks (escape their content from further processing)
+  const codeBlocks = [];
+  let text = md.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
+    codeBlocks.push({ lang, code: code.replace(/^\n+|\n+$/g, "") });
+    return `\x00CODEBLOCK_${codeBlocks.length - 1}\x00`;
+  });
+
+  // Escape HTML in non-code regions
+  // For simplicity, escape all then restore code blocks as raw
+  text = escapeHtml(text);
+
+  // Inline code
+  text = text.replace(/`([^`\n]+)`/g, "<code>$1</code>");
+
+  // Headings
+  text = text.replace(/^######\s+(.*)$/gm, "<h6>$1</h6>");
+  text = text.replace(/^#####\s+(.*)$/gm, "<h5>$1</h5>");
+  text = text.replace(/^####\s+(.*)$/gm, "<h4>$1</h4>");
+  text = text.replace(/^###\s+(.*)$/gm, "<h3>$1</h3>");
+  text = text.replace(/^##\s+(.*)$/gm, "<h2>$1</h2>");
+  text = text.replace(/^#\s+(.*)$/gm, "<h1>$1</h1>");
+
+  // Tables
+  text = text.replace(/((?:^\|.+\|\s*\n)+)/gm, (block) => {
+    const lines = block.trim().split("\n");
+    if (lines.length < 2) return block;
+    const sep = lines[1];
+    if (!/^\|?[\s\-:|]+\|?$/.test(sep)) return block;
+    const splitRow = l => l.replace(/^\|/, "").replace(/\|$/, "").split("|").map(s => s.trim());
+    const header = splitRow(lines[0]);
+    const rows = lines.slice(2).map(splitRow);
+    let h = "<table><thead><tr>";
+    header.forEach(c => h += `<th>${c}</th>`);
+    h += "</tr></thead><tbody>";
+    rows.forEach(r => { h += "<tr>"; r.forEach(c => h += `<td>${c}</td>`); h += "</tr>"; });
+    h += "</tbody></table>";
+    return h;
+  });
+
+  // Blockquote
+  text = text.replace(/(?:^&gt; .*\n?)+/gm, block => {
+    const content = block.trim().split("\n").map(l => l.replace(/^&gt; /, "")).join("<br>");
+    return `<blockquote>${content}</blockquote>`;
+  });
+
+  // Horizontal rule
+  text = text.replace(/^---+$/gm, "<hr>");
+
+  // Unordered lists
+  text = text.replace(/(?:^[*\-+] .+\n?)+/gm, block => {
+    const items = block.trim().split("\n").map(l => l.replace(/^[*\-+] /, ""));
+    return "<ul>" + items.map(i => `<li>${i}</li>`).join("") + "</ul>";
+  });
+  // Ordered lists
+  text = text.replace(/(?:^\d+\. .+\n?)+/gm, block => {
+    const items = block.trim().split("\n").map(l => l.replace(/^\d+\. /, ""));
+    return "<ol>" + items.map(i => `<li>${i}</li>`).join("") + "</ol>";
+  });
+
+  // Bold and italic
+  text = text.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+  text = text.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
+
+  // Links
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+
+  // Restore code blocks
+  text = text.replace(/\x00CODEBLOCK_(\d+)\x00/g, (m, i) => {
+    const cb = codeBlocks[parseInt(i, 10)];
+    return `<pre><code>${cb.code}</code></pre>`;
+  });
+
+  // Paragraphs
+  text = text.split(/\n{2,}/).map(block => {
+    block = block.trim();
+    if (!block) return "";
+    if (/^<(h\d|ul|ol|pre|blockquote|table|hr|p|div)/.test(block)) return block;
+    return "<p>" + block.replace(/\n/g, "<br>") + "</p>";
+  }).join("\n");
+
+  return text;
+}
+
+/* ---------- Persistence ---------- */
+// 旧 loadSession 已被 loadAllSessions/getCurrentSessionId 替代（见上）
+// 保留空函数避免外部引用报错（其实没有外部引用了）
+function loadSession() { return null; }
+
+function saveSession() {
+  if (!App.session) return;
+  try {
+    const list = loadAllSessions();
+    App.session.updatedAt = Date.now();
+    const idx = list.findIndex(s => s.id === App.session.id);
+    if (idx >= 0) list[idx] = App.session;
+    else list.unshift(App.session);
+    saveAllSessions(list);
+    setCurrentSessionId(App.session.id);
+    App.lastSaveTime = Date.now();
+    updateHeaderMeta();
+    scheduleAutoSnapshot();
+  } catch (e) {
+    console.error("Save failed", e);
+    toast("自动保存失败：" + e.message, 3000);
+  }
+}
+
+let autoSnapshotTimer = null;
+function scheduleAutoSnapshot() {
+  if (!App.session || !App.session.annotations.length) return;
+  if (autoSnapshotTimer) return; // already scheduled
+  autoSnapshotTimer = setTimeout(() => {
+    autoSnapshotTimer = null;
+    const last = App.lastBackupTime || 0;
+    const sinceMs = Date.now() - last;
+    const total = App.session.annotations.length;
+    // Auto-trigger backup if 10+ new annotations since last backup, and >= 15 minutes since last
+    const newSinceLast = total - (App.lastBackupAnnCount || 0);
+    if (newSinceLast >= 10 && sinceMs > 15 * 60 * 1000) {
+      downloadBackup(true);
+    }
+  }, 8000);
+}
+
+function downloadBackup(silent) {
+  if (!App.session) return;
+  const data = JSON.stringify(App.session, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  const src = App.session.source;
+  const safeName = (src.title || "session").replace(/[\\/:*?"<>|]/g, "_").slice(0, 40);
+  a.download = `annotator-${safeName}-${formatTime(Date.now()).replace(/[: ]/g, "-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  App.lastBackupTime = Date.now();
+  App.lastBackupAnnCount = App.session.annotations.length;
+  updateHeaderMeta();
+  if (!silent) toast("已下载 JSON 备份");
+}
+
+/* ---------- Workspace (File System Access API) ---------- */
+function isWorkspaceSupported() {
+  return typeof window.showDirectoryPicker === "function";
+}
+
+async function pickWorkspaceDirectory() {
+  if (!isWorkspaceSupported()) {
+    toast("当前浏览器不支持 File System Access API，请使用 Chrome 或 Edge", 3000);
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: "read" });
+    App.workspaceHandle = handle;
+    App.workspaceName = handle.name;
+    localStorage.setItem("wb-annotator-ws-name", handle.name);
+    await listWorkspaceFiles();
+    renderWorkspaceStatus();
+    toast(`已连接工作区：${handle.name}`);
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      console.error(e);
+      toast("选择目录失败：" + e.message);
+    }
+  }
+}
+
+async function listWorkspaceFiles() {
+  if (!App.workspaceHandle) return;
+  const files = [];
+  try {
+    for await (const entry of App.workspaceHandle.values()) {
+      if (entry.kind === "file") {
+        const name = entry.name;
+        if (/\.(md|markdown|html|htm|txt)$/i.test(name)) {
+          try {
+            const file = await entry.getFile();
+            files.push({
+              handle: entry,
+              name,
+              ext: (name.match(/\.([^.]+)$/) || [, "txt"])[1].toLowerCase(),
+              size: file.size,
+              mtime: file.lastModified
+            });
+          } catch (e) { /* skip unreadable */ }
+        }
+      }
+    }
+  } catch (e) {
+    toast("读取目录失败：" + e.message);
+    return;
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  App.workspaceFiles = files;
+  renderFileList(files);
+}
+
+function renderFileList(files) {
+  const list = $("#fileList");
+  if (files.length === 0) {
+    list.innerHTML = `<div class="empty-state" style="padding:30px 20px;">该目录下没有找到可标注的文件</div>`;
+    list.classList.remove("hidden");
+    return;
+  }
+  list.innerHTML = files.map((f, i) => {
+    const icon = (f.ext === "md" || f.ext === "markdown") ? "📝" :
+                 (f.ext === "html" || f.ext === "htm") ? "🌐" : "📄";
+    const sizeStr = f.size < 1024 ? `${f.size} B` :
+                    f.size < 1024 * 1024 ? `${(f.size / 1024).toFixed(1)} KB` :
+                    `${(f.size / 1024 / 1024).toFixed(1)} MB`;
+    const timeStr = formatRelativeTime(f.mtime);
+    return `
+      <div class="file-item" data-idx="${i}">
+        <span class="file-icon">${icon}</span>
+        <span class="file-name">${escapeHtml(f.name)}</span>
+        <span class="file-type">${escapeHtml(f.ext)}</span>
+        <span class="file-meta">${sizeStr} · ${timeStr}</span>
+      </div>
+    `;
+  }).join("");
+  list.classList.remove("hidden");
+}
+
+function formatRelativeTime(ts) {
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "刚刚";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+  if (diff < 7 * 86400000) return `${Math.floor(diff / 86400000)} 天前`;
+  return formatTime(ts).slice(0, 10);
+}
+
+function renderWorkspaceStatus() {
+  const status = $("#workspaceStatus");
+  if (!App.workspaceHandle) {
+    status.classList.add("hidden");
+    $("#btnRefreshFiles").disabled = true;
+    $("#btnDisconnectWS").disabled = true;
+    return;
+  }
+  status.innerHTML = `
+    <span style="color:var(--text-muted);">已连接：</span>
+    <span class="ws-path" title="${escapeHtml(App.workspaceName)}">📁 ${escapeHtml(App.workspaceName)}/</span>
+    <span style="font-size:11px;color:var(--text-subtle);">${App.workspaceFiles.length} 个文件</span>
+  `;
+  status.classList.remove("hidden");
+  $("#btnRefreshFiles").disabled = false;
+  $("#btnDisconnectWS").disabled = false;
+}
+
+function renderUnsupportedWorkspace() {
+  const c = $("#workspaceContainer");
+  if (!c) return;
+  c.innerHTML = `
+    <div class="workspace-unsupported">
+      <strong>当前浏览器不支持本地工作区功能。</strong><br>
+      File System Access API 仅在 Chrome 86+ / Edge 86+ 中可用。请改用「粘贴 Markdown / HTML」或「通过 URL」模式；或切换到 Chrome / Edge 后重新打开本工具。
+    </div>
+  `;
+}
+
+async function loadFileFromWorkspace(idx) {
+  const f = App.workspaceFiles[idx];
+  if (!f) return;
+  try {
+    const file = await f.handle.getFile();
+    const text = await file.text();
+    if (f.ext === "md" || f.ext === "markdown") {
+      const firstLine = text.split("\n").find(l => l.trim()) || f.name;
+      const title = firstLine.replace(/^#+\s*/, "").slice(0, 60) || f.name;
+      startSession({ type: "markdown", content: text, title, sourceFile: f.name });
+    } else if (f.ext === "html" || f.ext === "htm") {
+      const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+      const h1Match = text.match(/<h1[^>]*>(.*?)<\/h1>/i);
+      const title = (titleMatch && titleMatch[1]) ||
+                    (h1Match && h1Match[1].replace(/<[^>]+>/g, "")) ||
+                    f.name;
+      startSession({ type: "html", content: text, title: title.slice(0, 60), sourceFile: f.name });
+    } else {
+      startSession({ type: "markdown", content: text, title: f.name, sourceFile: f.name });
+    }
+  } catch (e) {
+    toast("读取文件失败：" + e.message);
+  }
+}
+
+function disconnectWorkspace() {
+  App.workspaceHandle = null;
+  App.workspaceFiles = [];
+  App.workspaceName = "";
+  localStorage.removeItem("wb-annotator-ws-name");
+  $("#fileList").classList.add("hidden");
+  renderWorkspaceStatus();
+  toast("已断开工作区");
+}
+
+/* ---------- Sample content ---------- */
+const SAMPLES = {
+  prd: `# 产品需求文档：智能书签功能 v1.2
+
+## 背景
+
+随着用户收藏的链接越来越多，现有的"标题 + 链接"两列展示已经无法满足快速找回的需求。内部调研显示，超过 60% 的用户在 3 个月内从未再次打开过自己收藏的页面，主要原因是**无法在需要时重新找到**。
+
+## 目标
+
+让用户在 5 秒内找到任意一个已收藏的页面，无论收藏时间早晚。
+
+## 范围
+
+本期仅做 Web 端，移动端在 v1.3 跟进。
+
+## 关键流程
+
+用户在书签页输入关键词 → 系统在前端做本地匹配 → 返回前 20 条结果 → 用户点击直达原页。
+
+## 指标
+
+- **采用率**：上线后 30 天内，至少打开过一次搜索框的 DAU 占比 ≥ 25%
+- **检索效率**：从输入到点击结果的 P50 ≤ 3 秒
+- **结果质量**：点击前 3 条结果的比例 ≥ 70%
+
+## 风险
+
+1. 索引膨胀：链接数据持续增长，本地索引可能超过 5MB，需要做分页
+2. 误匹配：纯前端 fuzzy 匹配在短词上误判率较高，需要做最小长度限制
+3. 跨域：部分站点的 og:title 抓取不稳定，影响离线索引的可用性
+
+## 不在本期范围
+
+- 标签和分组
+- 多人协作
+- 历史版本回溯
+
+> 注：以上指标均为初步估计，需要在 v1.2 上线后用真实数据校准。`
+};
+
+/* ---------- Session management ---------- */
+function startSession(source) {
+  App.session = {
+    id: uid(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    source,
+    annotations: [],
+    revisions: [],
+    aiResponses: []
+  };
+  App.annCounter = 0;
+  saveSession();
+  enterWorkspace();
+}
+
+function openSession(id) {
+  const list = loadAllSessions();
+  const sess = list.find(s => s.id === id);
+  if (!sess) {
+    toast("这条任务不存在或已删除");
+    renderHistoryList();
+    return;
+  }
+  App.session = sess;
+  App.annCounter = (sess.annotations || []).length;
+  App.activeAnnId = null;
+  App.editingId = null;
+  // 清空内容区让 renderContent 重新加载
+  const $content = $("#contentRender");
+  if ($content) { $content.innerHTML = ""; $content.dataset.loaded = ""; }
+  setCurrentSessionId(id);
+  enterWorkspace();
+  toast(`已打开任务：${truncate(sess.source && sess.source.title || "未命名", 40)}`);
+}
+
+function deleteSession(id) {
+  const list = loadAllSessions();
+  const sess = list.find(s => s.id === id);
+  if (!sess) { renderHistoryList(); return; }
+  const title = (sess.source && sess.source.title) || "未命名";
+  const annCount = (sess.annotations || []).length;
+  showConfirm({
+    title: "删除这条标注记录？",
+    message: `「${truncate(title, 30)}」的文档内容和 ${annCount} 条标注将永久删除。`,
+    hint: "建议先到当前任务点「保存」导出 JSON 备份。",
+    okText: "确认删除",
+    onOk: () => {
+      const newList = loadAllSessions().filter(s => s.id !== id);
+      saveAllSessions(newList);
+      // 如果删的是当前 session，回到欢迎页
+      if (App.session && App.session.id === id) {
+        App.session = null;
+        App.annCounter = 0;
+        setCurrentSessionId(null);
+        const $content = $("#contentRender");
+        if ($content) { $content.innerHTML = ""; $content.dataset.loaded = ""; }
+        $("#welcome").classList.remove("hidden");
+        $("#sidebar").classList.add("hidden");
+        $("#contentArea").classList.add("hidden");
+        updateHeaderMeta();
+      }
+      renderHistoryList();
+      toast("已删除");
+    }
+  });
+}
+
+function renderHistoryList() {
+  const $container = $("#historyList");
+  if (!$container) return;
+  const list = loadAllSessions().slice().sort(
+    (a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)
+  );
+  if (list.length === 0) {
+    $container.innerHTML = `
+      <div class="history-empty">
+        <div style="font-size:32px;opacity:0.4;margin-bottom:8px;">📚</div>
+        <div>还没有历史任务</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:6px;">
+          加载内容开始一次标注后，任务会自动出现在这里。
+        </div>
+      </div>`;
+    return;
+  }
+  const currentId = (App.session && App.session.id) || getCurrentSessionId();
+  const typeLabels = {
+    markdown: "MD", html: "HTML", sample: "示例", url: "URL", "url-iframe": "URL"
+  };
+  $container.innerHTML = list.map(s => {
+    const src = s.source || {};
+    const title = escapeHtml(src.title || "未命名文档");
+    const type = src.type || "?";
+    const typeLabel = typeLabels[type] || type;
+    const anns = s.annotations || [];
+    const annCount = anns.length;
+    const openCount = anns.filter(a => a.status !== "resolved").length;
+    const time = s.updatedAt || s.createdAt || 0;
+    const timeStr = formatTime(time);
+    const isCurrent = s.id === currentId;
+    return `
+      <div class="history-item ${isCurrent ? 'is-current' : ''}">
+        <div class="history-main" data-session-id="${s.id}">
+          <div class="history-title">${title}</div>
+          <div class="history-meta">
+            <span class="history-type">${typeLabel}</span>
+            <span class="history-dot">·</span>
+            <span>${annCount} 条标注（${openCount} 待处理）</span>
+            <span class="history-dot">·</span>
+            <span>${timeStr}</span>
+            ${isCurrent ? '<span class="current-badge">当前</span>' : ''}
+          </div>
+        </div>
+        <div class="history-actions">
+          <button class="history-open primary" data-session-id="${s.id}">
+            ${isCurrent ? '继续标注' : '打开'}
+          </button>
+          <button class="history-delete ghost" data-session-id="${s.id}" title="删除">×</button>
+        </div>
+      </div>`;
+  }).join("");
+  // 事件绑定
+  $$('.history-open').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      openSession(b.dataset.sessionId);
+    });
+  });
+  $$('.history-delete').forEach(b => {
+    b.addEventListener('click', e => {
+      e.stopPropagation();
+      deleteSession(b.dataset.sessionId);
+    });
+  });
+  // 点击整行（标题区）也打开
+  $$('.history-main').forEach(el => {
+    el.addEventListener('click', () => openSession(el.dataset.sessionId));
+  });
+}
+
+function enterWorkspace() {
+  $("#welcome").classList.add("hidden");
+  $("#sidebar").classList.remove("hidden");
+  $("#contentArea").classList.remove("hidden");
+  render();
+}
+
+function resetToWelcome() {
+  try {
+    App.session = null;
+    App.annCounter = 0;
+    App.activeAnnId = null;
+    App.editingId = null;
+    // 不清 currentSessionId：保留"上次的工作"，刷新页面能自动恢复
+    const $content = $("#contentRender");
+    if ($content) { $content.innerHTML = ""; $content.dataset.loaded = ""; }
+    const $md = $("#mdInput"); if ($md) $md.value = "";
+    const $html = $("#htmlInput"); if ($html) $html.value = "";
+    const $url = $("#urlInput"); if ($url) $url.value = "";
+    $("#welcome").classList.remove("hidden");
+    $("#sidebar").classList.add("hidden");
+    $("#contentArea").classList.add("hidden");
+    renderHistoryList(); // 重新渲染历史 tab
+    updateHeaderMeta();
+  } catch (err) {
+    console.error("resetToWelcome error", err);
+    toast("重置失败：" + err.message, 4000);
+  }
+}
+
+/* ---------- Mark 圈选 ---------- */
+let _markTool = null;       // 'rect' | 'arrow' | null
+let _markDrag = null;       // { startX, startY, currentX, currentY, box }
+
+function setMarkTool(tool) {
+  _markTool = (_markTool === tool) ? null : tool;
+  const overlay = $("#markOverlay");
+  const hint = $("#markHintFloat");
+  const bar = $("#markToolbarFloating");
+  $("#btnMarkRectFloat").classList.toggle("active", _markTool === "rect");
+  $("#btnMarkArrowFloat").classList.toggle("active", _markTool === "arrow");
+  if (_markTool) {
+    overlay.classList.add("tool-active");
+    hint.textContent = _markTool === "rect" ? "拖拽画矩形" : "拖拽画箭头";
+    if (bar) {
+      bar.classList.add("is-active");
+      // 激活态：hint 不空，close 按钮显示
+    }
+  } else {
+    overlay.classList.remove("tool-active");
+    if (bar) bar.classList.remove("is-active");
+    hint.textContent = "";
+    _markDrag = null;
+    renderMarkOverlay();
+  }
+}
+
+function clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+function onMarkMouseDown(e) {
+  if (!_markTool) return;
+  if (e.button !== 0) return;
+  e.preventDefault();
+  const overlay = $("#markOverlay");
+  const rect = overlay.getBoundingClientRect();
+  const startX = e.clientX - rect.left;
+  const startY = e.clientY - rect.top;
+  _markDrag = { startX, startY, currentX: startX, currentY: startY, w: rect.width, h: rect.height };
+  document.addEventListener("mousemove", onMarkMouseMove);
+  document.addEventListener("mouseup", onMarkMouseUp);
+}
+
+function onMarkMouseMove(e) {
+  if (!_markDrag) return;
+  const overlay = $("#markOverlay");
+  const rect = overlay.getBoundingClientRect();
+  _markDrag.currentX = e.clientX - rect.left;
+  _markDrag.currentY = e.clientY - rect.top;
+  drawMarkDraft();
+}
+
+function onMarkMouseUp(e) {
+  if (!_markDrag) return;
+  document.removeEventListener("mousemove", onMarkMouseMove);
+  document.removeEventListener("mouseup", onMarkMouseUp);
+  const d = _markDrag;
+  _markDrag = null;
+  const dx = d.currentX - d.startX;
+  const dy = d.currentY - d.startY;
+  if (Math.hypot(dx, dy) < 8) {
+    renderMarkOverlay();
+    return;
+  }
+  const boxW = d.w, boxH = d.h;
+  const markBox = _markTool === "arrow"
+    ? {
+        x1: clamp01(d.startX / boxW),
+        y1: clamp01(d.startY / boxH),
+        x2: clamp01(d.currentX / boxW),
+        y2: clamp01(d.currentY / boxH)
+      }
+    : {
+        x: clamp01(Math.min(d.startX, d.currentX) / boxW),
+        y: clamp01(Math.min(d.startY, d.currentY) / boxH),
+        w: clamp01(Math.abs(dx) / boxW),
+        h: clamp01(Math.abs(dy) / boxH)
+      };
+  // ★ 反查端点对应原文片段（用 viewport 像素坐标）
+  const overlay = $("#markOverlay");
+  const overlayRect = overlay.getBoundingClientRect();
+  let startAnchor = "", endAnchor = "", areaAnchor = "";
+  if (_markTool === "arrow") {
+    startAnchor = pickTextFromPoint(d.startX + overlayRect.left, d.startY + overlayRect.top);
+    endAnchor = pickTextFromPoint(d.currentX + overlayRect.left, d.currentY + overlayRect.top);
+  } else {
+    // 矩形取中心点
+    const cx = (d.startX + d.currentX) / 2 + overlayRect.left;
+    const cy = (d.startY + d.currentY) / 2 + overlayRect.top;
+    areaAnchor = pickTextFromPoint(cx, cy);
+  }
+  App.currentSelection = {
+    kind: "mark",
+    markKind: _markTool,
+    markBox,
+    startAnchor, endAnchor, areaAnchor
+  };
+  setMarkTool(null);
+  openAnnotationModal(null);
+}
+
+function drawMarkDraft() {
+  if (!_markDrag) return;
+  const d = _markDrag;
+  const draft = _markTool === "arrow"
+    ? `<line x1="${d.startX}" y1="${d.startY}" x2="${d.currentX}" y2="${d.currentY}" class="mark-draft" marker-end="url(#arrowhead)"/>`
+    : `<rect x="${Math.min(d.startX, d.currentX)}" y="${Math.min(d.startY, d.currentY)}" width="${Math.abs(d.currentX - d.startX)}" height="${Math.abs(d.currentY - d.startY)}" class="mark-draft"/>`;
+  renderMarkOverlay(draft);
+}
+
+function renderMarkOverlay(draftHtml = "") {
+  const overlay = $("#markOverlay");
+  if (!overlay) return;
+  const anns = App.session ? App.session.annotations : [];
+  const marks = anns.filter(a => a.type === "mark" && a.markBox);
+  const arrowDefs = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#ff5722"/></marker><marker id="arrowhead-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4caf50"/></marker></defs>`;
+  const viewBox = `viewBox="0 0 1000 1000" preserveAspectRatio="none"`;
+  const marksSvg = marks.map(markAnnotationToSvg).join("");
+  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${draftHtml}</svg>`;
+}
+
+// renderContent 用 render.innerHTML = X 会清掉 contentRender 内的 markOverlay，
+// 这里把它重新挂上，并重绑 mousedown 监听。幂等，可多次调用。
+function rebindMarkOverlay() {
+  const render = $("#contentRender");
+  if (!render) return;
+  if ($("#markOverlay")) return; // 已在
+  const ov = document.createElement("div");
+  ov.className = "mark-overlay";
+  ov.id = "markOverlay";
+  render.appendChild(ov);
+  ov.addEventListener("mousedown", onMarkMouseDown);
+}
+
+function markAnnotationToSvg(m) {
+  const isArrow = m.markKind === "arrow";
+  const completed = m.status === "resolved";
+  const active = App.activeAnnId === m.id;
+  const shapeCls = `mark-shape${completed ? " completed" : ""}${active ? " flash" : ""}`;
+  if (isArrow) {
+    const { x1, y1, x2, y2 } = m.markBox;
+    return `<g data-ann-id="${m.id}">
+      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${shapeCls}" fill="none" stroke="none"/>
+      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="mark-arrow${completed ? " completed" : ""}" marker-end="url(#${completed ? "arrowhead-done" : "arrowhead"})"/>
+      <circle cx="${x1*1000}" cy="${y1*1000}" r="14" class="mark-num"/>
+      <text x="${x1*1000}" y="${y1*1000}" class="mark-num" text-anchor="middle" dominant-baseline="central" stroke="none">${m.order}</text>
+    </g>`;
+  }
+  const { x, y, w, h } = m.markBox;
+  return `<g data-ann-id="${m.id}">
+    <rect x="${x*1000}" y="${y*1000}" width="${w*1000}" height="${h*1000}" class="${shapeCls}"/>
+    <text x="${(x+w/2)*1000}" y="${(y+h/2)*1000}" class="mark-num" text-anchor="middle" dominant-baseline="central" stroke="none">${m.order}</text>
+  </g>`;
+}
+
+/* ---------- Render content ---------- */
+function renderContent() {
+  const render = $("#contentRender");
+  if (render.dataset.loaded === "1") return;
+  const src = App.session.source;
+  if (src.type === "url-iframe") {
+    render.style.padding = "0";
+    render.style.maxWidth = "none";
+    render.style.background = "transparent";
+    render.style.boxShadow = "none";
+    render.style.minHeight = "calc(100vh - 80px)";
+    render.innerHTML = `<iframe src="${escapeHtml(src.url)}" class="content-iframe" referrerpolicy="no-referrer-when-downgrade" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>`;
+  } else if (src.type === "html") {
+    render.innerHTML = src.content;
+  } else if (src.type === "markdown") {
+    render.innerHTML = md2html(src.content);
+  } else if (src.type === "sample") {
+    render.innerHTML = md2html(SAMPLES.prd);
+  } else if (src.type === "url") {
+    render.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text-muted);">
+      <p>正在通过 fetch 加载 URL（<code>${escapeHtml(src.url)}</code>）…</p>
+    </div>`;
+    fetch(src.url, { mode: "cors" })
+      .then(r => r.ok ? r.text() : Promise.reject(new Error("HTTP " + r.status)))
+      .then(html => {
+        const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        const content = bodyMatch ? bodyMatch[1] : html;
+        App.session.source.content = content;
+        saveSession();
+        render.innerHTML = content;
+        rebindMarkOverlay();
+      })
+      .catch(err => {
+        render.innerHTML = `<div style="padding:40px;color:var(--danger);">
+          <h3 style="margin-top:0;">无法加载 URL</h3>
+          <p style="color:var(--text-muted);">原因：${escapeHtml(err.message)}</p>
+          <p style="color:var(--text-muted);font-size:13px;">
+            大多数页面开启了 CORS 限制，无法被跨域获取。建议改用「iframe overlay 模式」重新加载。
+          </p>
+        </div>`;
+        rebindMarkOverlay();
+      });
+  }
+  render.dataset.loaded = "1";
+  rebindMarkOverlay();
+
+  const labels = { html: "HTML 源码", markdown: "Markdown", sample: "示例", url: "URL", "url-iframe": "URL (iframe)" };
+  $("#sourceLabel").textContent = `来源：${labels[src.type] || src.type}`;
+  $("#sourceMeta").textContent = src.title || src.url || "";
+}
+
+/* ---------- Selection handling ---------- */
+function getSelectionInfo() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return null;
+  const range = sel.getRangeAt(0);
+  if (range.collapsed) return null;
+  const container = $("#contentRender");
+  if (!container || !container.contains(range.commonAncestorContainer)) return null;
+
+  const text = sel.toString().trim();
+  if (!text) return null;
+
+  const preRange = document.createRange();
+  try {
+    preRange.setStart(container, 0);
+    preRange.setEnd(range.startContainer, range.startOffset);
+  } catch (e) { return null; }
+  const before = preRange.toString().slice(-200);
+
+  const postRange = document.createRange();
+  try {
+    postRange.setStart(range.endContainer, range.endOffset);
+    postRange.setEnd(container, container.childNodes.length);
+  } catch (e) {
+    // fallback: end at last child
+    const last = container.lastChild;
+    if (last) {
+      postRange.setStart(range.endContainer, range.endOffset);
+      try { postRange.setEnd(last, last.childNodes.length || last.length || 0); } catch (_) { return null; }
+    }
+  }
+  const after = postRange.toString().slice(0, 200);
+
+  return { text, before, after };
+}
+
+function showTooltip(x, y) {
+  const t = $("#tooltip");
+  t.style.left = x + "px";
+  t.style.top = (y - 38) + "px";
+  t.classList.remove("hidden");
+}
+function hideTooltip() {
+  $("#tooltip").classList.add("hidden");
+}
+
+/* ---------- Modal ---------- */
+function openAnnotationModal(ann) {
+  App.editingId = ann ? ann.id : null;
+  $("#modalTitle").textContent = ann ? "编辑标注" : "新建标注";
+  $("#modalDelete").classList.toggle("hidden", !ann);
+
+  if (ann) {
+    const r = document.querySelector(`input[name="annType"][value="${ann.type}"]`);
+    if (r) r.checked = true;
+    const q = ann.type === "mark" ? formatMarkQuote(ann) : (ann.selectedText || "");
+    $("#quoteText").textContent = q;
+    $("#quoteText").classList.toggle("empty", !q);
+    $("#proposedText").value = ann.proposedText || "";
+    $("#annComment").value = ann.comment || "";
+    $("#aiQuestion").value = ann.aiQuestion || "";
+    $("#annVerify").value = ann.verify || "";
+  } else {
+    document.querySelector('input[name="annType"][value="comment"]').checked = true;
+    const q = App.currentSelection
+      ? (App.currentSelection.kind === "mark" ? formatMarkQuote(App.currentSelection) : App.currentSelection.text)
+      : "";
+    $("#quoteText").textContent = q;
+    $("#quoteText").classList.toggle("empty", !q);
+    $("#proposedText").value = "";
+    $("#annComment").value = "";
+    $("#aiQuestion").value = "";
+    $("#annVerify").value = "";
+  }
+
+  updateTypeUI();
+  syncRadioLabels();
+  $("#annModal").classList.remove("hidden");
+  setTimeout(() => $("#annComment").focus(), 60);
+}
+
+function formatMarkQuote(sel) {
+  const m = sel.mark || sel;
+  const orderLabel = m.order ? `#${m.order}` : "";
+  if (m.markKind === "arrow" || m.markBox && m.markBox.x2 !== undefined) {
+    const from = m.startAnchor || `起点`;
+    const to = m.endAnchor || `终点`;
+    return `↗ 箭头${orderLabel} · "${from}" → "${to}"`;
+  }
+  const where = m.areaAnchor || `矩形区域`;
+  return `▭ 矩形${orderLabel} · "${where}"`;
+}
+
+function updateTypeUI() {
+  const type = document.querySelector('input[name="annType"]:checked').value;
+  const proposedGroup = $("#proposedGroup");
+  const proposedLabel = $("#proposedLabel");
+  if (type === "replace") {
+    proposedGroup.classList.remove("hidden");
+    proposedLabel.textContent = "建议替换为";
+  } else if (type === "insert") {
+    proposedGroup.classList.remove("hidden");
+    proposedLabel.textContent = "要插入的内容（会放在选区后）";
+  } else if (type === "delete") {
+    proposedGroup.classList.add("hidden");
+  } else if (type === "mark") {
+    proposedGroup.classList.add("hidden");
+  } else {
+    proposedGroup.classList.add("hidden");
+  }
+}
+
+function syncRadioLabels() {
+  $$("#typeRadio label").forEach(l => {
+    const inp = l.querySelector("input");
+    l.classList.toggle("checked", inp && inp.checked);
+  });
+}
+
+function closeAnnotationModal() {
+  $("#annModal").classList.add("hidden");
+  // 清掉浏览器里残留的选区（蓝色高亮），避免用户误以为还有选中的内容
+  try { window.getSelection().removeAllRanges(); } catch (_) {}
+  App.editingId = null;
+  App.currentSelection = null;
+}
+
+let _confirmCallback = null;
+function showConfirm({ title = "确认操作", message = "", hint = "", okText = "确认", onOk }) {
+  $("#confirmTitle").textContent = title;
+  $("#confirmMessage").textContent = message;
+  $("#confirmHint").textContent = hint;
+  $("#confirmOk").textContent = okText;
+  _confirmCallback = onOk || null;
+  $("#confirmModal").classList.remove("hidden");
+}
+function closeConfirm() {
+  $("#confirmModal").classList.add("hidden");
+  _confirmCallback = null;
+}
+
+function saveAnnotation() {
+  const type = document.querySelector('input[name="annType"]:checked').value;
+  const comment = $("#annComment").value.trim();
+  const proposed = $("#proposedText").value;
+  const aiQ = $("#aiQuestion").value.trim();
+  const verify = $("#annVerify").value.trim();
+
+  if (!comment && !proposed && !aiQ) {
+    toast("请至少填写说明、建议替换内容或 AI 问题中的一项");
+    return;
+  }
+
+  if (App.editingId) {
+    const ann = App.session.annotations.find(a => a.id === App.editingId);
+    if (ann) {
+      ann.type = type;
+      ann.comment = comment;
+      ann.proposedText = proposed;
+      ann.aiQuestion = aiQ;
+      ann.verify = verify;
+      ann.updatedAt = Date.now();
+    }
+  } else {
+    if (!App.currentSelection) return;
+    const order = ++App.annCounter;
+    const sel = App.currentSelection;
+    const ann = {
+      id: uid(),
+      order,
+      type,
+      status: "open",
+      comment,
+      proposedText: proposed,
+      aiQuestion: aiQ,
+      verify,
+      aiResponse: "",
+      createdAt: Date.now()
+    };
+    if (sel.kind === "mark") {
+      ann.type = "mark";
+      ann.markKind = sel.markKind;
+      ann.markBox = sel.markBox;
+      ann.startAnchor = sel.startAnchor || "";
+      ann.endAnchor = sel.endAnchor || "";
+      ann.areaAnchor = sel.areaAnchor || "";
+      ann.selectedText = formatMarkQuote({
+        markBox: sel.markBox,
+        markKind: sel.markKind,
+        order,
+        startAnchor: sel.startAnchor,
+        endAnchor: sel.endAnchor,
+        areaAnchor: sel.areaAnchor
+      });
+    } else {
+      ann.selectedText = sel.text;
+      ann.contextBefore = sel.before;
+      ann.contextAfter = sel.after;
+    }
+    App.session.annotations.push(ann);
+  }
+
+  saveSession();
+  closeAnnotationModal();
+  render();
+  const last = App.editingId || App.session.annotations[App.session.annotations.length - 1].id;
+  // 不再 scrollIntoView center — 避免把用户原本看的下一段文字滚走
+  // 只闪一下标号颜色，让用户知道"这条保存好了"
+  flashAnnotationInContent(last, false);
+  // 持续引导：告诉用户下一步该做什么
+  const total = App.session.annotations.length;
+  toast(`✓ 标注 #${App.session.annotations[App.session.annotations.length - 1].order} 已保存 · 继续选中下一段文字添加 #${total + 1}`, 2800);
+}
+
+function deleteAnnotationById(id) {
+  if (!confirm("确认删除此标注？")) return;
+  App.session.annotations = App.session.annotations.filter(a => a.id !== id);
+  reorderAnnotations();
+  saveSession();
+  render();
+}
+
+/* ---------- Annotation list rendering ---------- */
+function renderAnnotationList() {
+  const list = $("#annotationList");
+  const anns = App.session ? App.session.annotations : [];
+
+  if (anns.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <div>在右侧内容中选中文字</div>
+        <div style="margin-top:4px;">即可添加标注</div>
+      </div>`;
+    return;
+  }
+
+  list.innerHTML = anns.map(a => renderAnnotationItem(a)).join("");
+}
+
+function renderAnnotationItem(a) {
+  const typeInfo = TYPES[a.type] || TYPES.comment;
+  const cls = [
+    "annotation-item",
+    a.status === "resolved" ? "resolved" : "",
+    a.id === App.activeAnnId ? "active" : ""
+  ].filter(Boolean).join(" ");
+
+  let body = "";
+  if (a.selectedText) {
+    body += `<div class="ann-text type-${a.type}">${escapeHtml(a.selectedText)}</div>`;
+  }
+  if (a.proposedText && (a.type === "replace" || a.type === "insert")) {
+    const prefix = a.type === "insert" ? "prefix-insert" : "prefix-replace";
+    body += `<div class="ann-proposed ${prefix}">${escapeHtml(a.proposedText)}</div>`;
+  }
+  if (a.comment) {
+    body += `<div class="ann-comment">${escapeHtml(a.comment)}</div>`;
+  }
+  if (a.aiQuestion) {
+    body += `<div class="ann-question">问 AI：${escapeHtml(a.aiQuestion)}</div>`;
+  }
+  if (a.verify) {
+    body += `<div class="ann-verify">✓ 验证：${escapeHtml(truncate(a.verify, 120))}</div>`;
+  }
+  if (a.aiResponse) {
+    body += `<div class="ann-response">${escapeHtml(truncate(a.aiResponse, 240))}</div>`;
+  }
+
+  return `
+    <div class="annotation-item ${cls}" data-id="${a.id}">
+      <div class="ann-header">
+        <span class="ann-order">#${a.order}</span>
+        <span class="ann-type ann-type-${a.type}">${typeInfo.label}</span>
+        <span style="flex:1"></span>
+        <span style="font-size:11px;">${a.status === "resolved" ? "✓ 已完成" : "○ 待处理"}</span>
+      </div>
+      ${body}
+      <div class="ann-actions">
+        <button data-act="jump">定位</button>
+        <button data-act="edit">编辑</button>
+        <button data-act="resolve" class="${a.status === "resolved" ? "" : "success"}">${a.status === "resolved" ? "重开" : "完成"}</button>
+        <button data-act="del" class="danger">删除</button>
+      </div>
+    </div>`;
+}
+
+function renderRevisionList() {
+  const list = $("#revisionList");
+  const revs = App.session ? App.session.revisions : [];
+  if (revs.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">✓</div>
+        <div>完成的修订会出现在这里</div>
+      </div>`;
+    return;
+  }
+  list.innerHTML = revs.slice().reverse().map(r => `
+    <div class="revision-item">
+      <div class="meta">
+        <span class="ann-order">#${r.fromOrder}</span>
+        <span>${formatTime(r.resolvedAt)}</span>
+        <span style="flex:1"></span>
+        <span>${escapeHtml(r.type || "—")}</span>
+      </div>
+      <div class="summary">${escapeHtml(r.summary || "")}</div>
+    </div>
+  `).join("");
+}
+
+function renderAIPanel() {
+  const responses = App.session ? App.session.aiResponses : [];
+  const hist = $("#aiHistory");
+  if (responses.length === 0) {
+    hist.innerHTML = "";
+  } else {
+    hist.innerHTML = `<div style="font-size:11px;color:var(--text-muted);padding:0 0 6px 0;">历史回应</div>` +
+      responses.slice().reverse().map(r => `
+        <div class="ai-history-item">
+          <div class="meta">
+            <span>${formatTime(r.at)}</span>
+            <span>匹配 ${r.matched} 条</span>
+          </div>
+          <div class="preview">${escapeHtml(r.text)}</div>
+        </div>
+      `).join("");
+  }
+}
+
+function updateCounts() {
+  const anns = App.session ? App.session.annotations : [];
+  const revs = App.session ? App.session.revisions : [];
+  const open = anns.filter(a => a.status === "open").length;
+  $("#annCount").textContent = `${anns.length} 条`;
+  $("#openCount").textContent = open;
+  $("#revCount").textContent = revs.length;
+}
+
+function updateHeaderMeta() {
+  // 更新历史徽标
+  const allList = loadAllSessions();
+  const $badge = $("#historyBadge");
+  if ($badge) {
+    if (allList.length > 0) {
+      $badge.textContent = allList.length;
+      $badge.classList.remove("hidden");
+    } else {
+      $badge.classList.add("hidden");
+    }
+  }
+  if (!App.session) {
+    const histText = allList.length > 0 ? ` · 共 ${allList.length} 条历史任务` : "";
+    $("#headerMeta").textContent = "未加载内容" + histText;
+    return;
+  }
+  const anns = App.session.annotations;
+  const open = anns.filter(a => a.status === "open").length;
+  const total = anns.length;
+  const src = App.session.source;
+  const labels = { html: "HTML", markdown: "Markdown", sample: "示例", url: "URL" };
+  const srcName = src.title || labels[src.type] || "会话";
+  const baseText = `${srcName} · ${total} 条标注（${open} 待处理）`;
+
+  // Save indicator
+  const saveHtml = (total > 0 && App.lastSaveTime) ?
+    ` <span class="save-indicator" id="saveIndicator" title="标注每次修改都会自动保存到浏览器本地存储">` +
+    `<span class="dot"></span>已自动保存 · ${formatRelativeTime(App.lastSaveTime)}</span>` : "";
+
+  $("#headerMeta").innerHTML = baseText + saveHtml;
+}
+
+function render() {
+  if (App.session) {
+    renderContent();
+    renderMarkOverlay();
+    renderAllHighlights();
+    renderAnnotationList();
+    renderRevisionList();
+    renderAIPanel();
+    updateCounts();
+    updateHeaderMeta();
+    renderHistoryList(); // 同步历史 tab 列表（时间戳/计数）
+  } else {
+    renderAnnotationList();
+    renderRevisionList();
+    renderAIPanel();
+    updateCounts();
+    updateHeaderMeta();
+    renderHistoryList();
+  }
+}
+
+function reorderAnnotations() {
+  App.session.annotations.forEach((a, i) => a.order = i + 1);
+  App.annCounter = App.session.annotations.length;
+}
+
+/* ---------- Highlight in content ---------- */
+function clearHighlights() {
+  $$(".content-render mark.highlight, .content-render mark.flash").forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+    parent.normalize();
+  });
+}
+
+// 不清的版本：用于批量标（不互相覆盖）
+function wrapTextInContent(text, order) {
+  if (!text) return null;
+  const container = $("#contentRender");
+  if (!container) return null;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) nodes.push(n);
+  for (const tn of nodes) {
+    // 跳过已经在 mark 里的 textNode（避免重复包）
+    if (tn.parentNode && tn.parentNode.tagName === "MARK") continue;
+    const idx = tn.textContent.indexOf(text);
+    if (idx >= 0) {
+      const range = document.createRange();
+      try {
+        range.setStart(tn, idx);
+        range.setEnd(tn, idx + text.length);
+      } catch (e) { continue; }
+      const mark = document.createElement("mark");
+      mark.className = "highlight";
+      if (order) mark.setAttribute("data-order", order);
+      mark.setAttribute("title", `标注 #${order}：${text.slice(0, 30)}${text.length > 30 ? "…" : ""}`);
+      try {
+        range.surroundContents(mark);
+        return mark;
+      } catch (e) {
+        return null;
+      }
+    }
+  }
+  return null;
+}
+
+function highlightTextInContent(text, order) {
+  clearHighlights();
+  if (!text) return null;
+  return wrapTextInContent(text, order);
+}
+
+function highlightAnnotationInContent(id) {
+  if (!App.session) return;
+  const ann = App.session.annotations.find(a => a.id === id);
+  if (!ann) return;
+  App.activeAnnId = id;
+
+  $$(".annotation-item").forEach(el => el.classList.remove("active"));
+  const item = document.querySelector(`.annotation-item[data-id="${id}"]`);
+  if (item) {
+    item.classList.add("active");
+    item.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  if (ann.type === "mark" && ann.markBox) {
+    const overlay = $("#markOverlay");
+    const rect = overlay.getBoundingClientRect();
+    let cx, cy;
+    if (ann.markKind === "arrow") {
+      cx = (ann.markBox.x1 + ann.markBox.x2) / 2;
+      cy = (ann.markBox.y1 + ann.markBox.y2) / 2;
+    } else {
+      cx = ann.markBox.x + ann.markBox.w / 2;
+      cy = ann.markBox.y + ann.markBox.h / 2;
+    }
+    const scroll = $("#contentScroll");
+    const targetY = overlay.offsetTop + cy * rect.height - scroll.clientHeight / 2;
+    scroll.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
+    renderMarkOverlay();
+    setTimeout(() => renderMarkOverlay(), 1600);
+    return;
+  }
+
+  const mark = highlightTextInContent(ann.selectedText, ann.order);
+  if (mark) {
+    mark.scrollIntoView({ behavior: "smooth", block: "center" });
+    mark.classList.add("flash");
+    setTimeout(() => mark.classList.remove("flash"), 1600);
+  } else if (ann.selectedText) {
+    toast("选中文本在内容中未直接匹配（可能因修改过上下文），请用「定位」旁的人工查找", 2400);
+  }
+}
+
+// 把所有已标的位置都加上持久 mark + data-order，让用户随时知道哪些已标
+function renderAllHighlights() {
+  if (!App.session) return;
+  // 先清掉所有 flash/highlight
+  $$(".content-render mark.highlight, .content-render mark.flash").forEach(el => {
+    const parent = el.parentNode;
+    while (el.firstChild) parent.insertBefore(el.firstChild, el);
+    parent.removeChild(el);
+  });
+  const container = $("#contentRender");
+  if (!container) return;
+  // 只标 text 类型的（mark 类型由 overlay 渲染，不进文本 mark）
+  const textAnns = App.session.annotations.filter(a => a.type !== "mark" && a.selectedText);
+  // 按文本长度倒序标，先标长的避免短文本覆盖长的
+  textAnns.sort((a, b) => b.selectedText.length - a.selectedText.length);
+  for (const ann of textAnns) {
+    wrapTextInContent(ann.selectedText, ann.order);
+  }
+  // 重新 normalize 一下，把相邻 text node 合并回去
+  container.normalize();
+  // 重新挂上 active 标记
+  if (App.activeAnnId) {
+    const item = document.querySelector(`.annotation-item[data-id="${App.activeAnnId}"]`);
+    if (item) item.classList.add("active");
+  }
+}
+
+// 保存标注后的轻量反馈：给已存在的 mark 加 flash class（不重画、不滚动）
+function flashAnnotationInContent(id, scrollIntoView) {
+  if (!App.session) return;
+  const ann = App.session.annotations.find(a => a.id === id);
+  if (!ann) return;
+  App.activeAnnId = id;
+  $$(".annotation-item").forEach(el => el.classList.remove("active"));
+  const item = document.querySelector(`.annotation-item[data-id="${id}"]`);
+  if (item) item.classList.add("active");
+  if (ann.type === "mark" && ann.markBox) {
+    renderMarkOverlay();
+    return;
+  }
+  // 不重画 mark（renderAllHighlights 已经画好），只对当前标注对应的 mark 加 flash
+  const mark = document.querySelector(`#contentRender mark.highlight[data-order="${ann.order}"]`);
+  if (mark) {
+    if (scrollIntoView) mark.scrollIntoView({ behavior: "smooth", block: "center" });
+    mark.classList.add("flash");
+    setTimeout(() => mark.classList.remove("flash"), 1400);
+  }
+}
+
+/* ---------- Resolve / Unresolve ---------- */
+function toggleResolve(id) {
+  const ann = App.session.annotations.find(a => a.id === id);
+  if (!ann) return;
+  if (ann.status === "open") {
+    ann.status = "resolved";
+    ann.resolvedAt = Date.now();
+    if (ann.aiResponse) {
+      App.session.revisions.push({
+        fromOrder: ann.order,
+        annId: ann.id,
+        type: TYPES[ann.type].label,
+        summary: buildRevisionSummary(ann),
+        resolvedAt: Date.now()
+      });
+    }
+  } else {
+    ann.status = "open";
+    delete ann.resolvedAt;
+    App.session.revisions = App.session.revisions.filter(r => r.annId !== ann.id);
+  }
+  saveSession();
+  render();
+}
+
+function buildRevisionSummary(ann) {
+  let s = "";
+  if (ann.proposedText && ann.type === "replace") {
+    s = `将「${truncate(ann.selectedText, 30)}」替换为「${truncate(ann.proposedText, 40)}」`;
+  } else if (ann.proposedText && ann.type === "insert") {
+    s = `在「${truncate(ann.selectedText, 30)}」后插入「${truncate(ann.proposedText, 40)}」`;
+  } else if (ann.type === "delete") {
+    s = `删除「${truncate(ann.selectedText, 40)}」`;
+  } else if (ann.comment) {
+    s = ann.comment;
+  } else if (ann.aiQuestion) {
+    s = `AI 回答：${truncate(ann.aiResponse || "", 60)}`;
+  }
+  if (ann.comment && (ann.proposedText || ann.type === "delete")) {
+    s += `（${truncate(ann.comment, 40)}）`;
+  }
+  return s;
+}
+
+/* ---------- Export to AI (极简格式，每行一条) ---------- */
+function pickAnchor(ann) {
+  // mark 类型无选中文本，用反查到的文字片段当锚点
+  if (ann.type === "mark" && ann.markBox) {
+    if (ann.markKind === "arrow") {
+      const from = ann.startAnchor || `起点`;
+      const to = ann.endAnchor || `终点`;
+      return `箭头 从@"${from}" → 指向@"${to}"`;
+    }
+    const where = ann.areaAnchor || `矩形区域`;
+    return `矩形 @"${where}"`;
+  }
+  if (ann.selectedText) {
+    const t = ann.selectedText.replace(/\s+/g, " ").trim();
+    return `"${truncate(t, 10)}"`;
+  }
+  return `第${ann.order}处`;
+}
+
+function buildExport() {
+  if (!App.session) return "";
+  const open = App.session.annotations.filter(a => a.status === "open");
+  if (open.length === 0) return "（无待处理标注）\n";
+  const lines = [];
+  open.forEach(a => {
+    const summary = buildRevisionSummary(a);
+    const anchor = pickAnchor(a);
+    lines.push(`标注 #${a.order} @${anchor} → ${summary}`);
+    if (a.verify) lines.push(`  · 验证：${a.verify}`);
+  });
+  return lines.join("\n") + "\n";
+}
+
+function showExport() {
+  if (!App.session || App.session.annotations.length === 0) {
+    toast("当前会话还没有标注");
+    return;
+  }
+  $("#exportPreview").textContent = buildExport();
+  $("#exportModal").classList.remove("hidden");
+}
+
+function hideExport() {
+  $("#exportModal").classList.add("hidden");
+}
+
+/* ---------- AI response parsing ---------- */
+function parseAIResponse() {
+  const input = $("#aiResponseInput").value.trim();
+  if (!input) { toast("请先粘贴 AI 回应内容"); return; }
+
+  // Match "标注 #N" / "#N" patterns, capturing the number
+  const patterns = [
+    /标注\s*#\s*(\d+)/g,
+    /#\s*(\d+)\s*[:：、.。]/g,
+    /##\s*标注\s*#\s*(\d+)/gi
+  ];
+  const matchedOrders = new Set();
+  patterns.forEach(re => {
+    let m;
+    while ((m = re.exec(input)) !== null) {
+      matchedOrders.add(parseInt(m[1], 10));
+    }
+  });
+
+  const resolvedIds = [];
+  matchedOrders.forEach(order => {
+    const ann = App.session.annotations.find(a => a.order === order && a.status === "open");
+    if (ann) {
+      ann.status = "resolved";
+      ann.resolvedAt = Date.now();
+      ann.aiResponse = input;
+      App.session.revisions.push({
+        fromOrder: ann.order,
+        annId: ann.id,
+        type: TYPES[ann.type].label,
+        summary: buildRevisionSummary(ann),
+        resolvedAt: Date.now()
+      });
+      resolvedIds.push(ann.id);
+    }
+  });
+
+  App.session.aiResponses.push({
+    at: Date.now(),
+    text: input,
+    matched: resolvedIds.length
+  });
+
+  saveSession();
+  render();
+
+  if (resolvedIds.length === 0) {
+    toast(`未识别到「标注 #N」格式，回应已存档。下次让 AI 用 "标注 #1：..." 格式回应。`, 3500);
+  } else {
+    toast(`已勾选 ${resolvedIds.length} 条标注为完成`, 2200);
+    $("#aiResponseInput").value = "";
+  }
+}
+
+/* ---------- Events ---------- */
+function init() {
+  // Welcome tabs
+  $$("[data-welcome-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      $$("[data-welcome-tab]").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      $$("[data-welcome-pane]").forEach(p => p.classList.add("hidden"));
+      $(`[data-welcome-pane="${btn.dataset.welcomeTab}"]`).classList.remove("hidden");
+    });
+  });
+
+  $("#btnLoadMd").addEventListener("click", () => {
+    const md = $("#mdInput").value.trim();
+    if (!md) { toast("请粘贴 Markdown 内容"); return; }
+    const firstLine = md.split("\n").find(l => l.trim()) || "Markdown";
+    const title = firstLine.replace(/^#+\s*/, "").slice(0, 60) || "Markdown 文档";
+    startSession({ type: "markdown", content: md, title });
+  });
+
+  $("#btnLoadHtml").addEventListener("click", () => {
+    const html = $("#htmlInput").value.trim();
+    if (!html) { toast("请粘贴 HTML 内容"); return; }
+    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+    const h1Match = html.match(/<h1[^>]*>(.*?)<\/h1>/i);
+    const title = (titleMatch && titleMatch[1]) || (h1Match && h1Match[1].replace(/<[^>]+>/g, "")) || "HTML 文档";
+    startSession({ type: "html", content: html, title: title.slice(0, 60) });
+  });
+
+  $("#btnLoadUrl").addEventListener("click", async () => {
+    const url = $("#urlInput").value.trim();
+    if (!url) { toast("请输入 URL"); return; }
+    if (!/^https?:\/\//i.test(url)) { toast("URL 必须以 http:// 或 https:// 开头"); return; }
+    toast("正在尝试获取页面…", 1200);
+    try {
+      const r = await fetch(url, { mode: "cors" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const text = await r.text();
+      const bodyMatch = text.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      const content = bodyMatch ? bodyMatch[1] : text;
+      const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+      const title = (titleMatch && titleMatch[1]) || url;
+      startSession({ type: "html", content, title: title.slice(0, 60), sourceUrl: url });
+    } catch (err) {
+      console.warn("URL fetch failed:", err);
+      showConfirm({
+        title: "无法直接获取该页面",
+        message: `CORS 策略阻止了直接抓取。可以用「iframe overlay 模式」加载：把页面塞进 iframe 跨域加载，你只能圈选/画箭头标注。`,
+        hint: "如需选中文本标注，请改用「通过 URL 加载 → 查看源代码 → 复制 HTML」路径。",
+        okText: "用 iframe 模式加载",
+        onOk: () => startSession({ type: "url-iframe", url, title: url })
+      });
+    }
+  });
+
+  $("#btnLoadSample").addEventListener("click", () => {
+    startSession({ type: "sample", title: "示例：智能书签 PRD v1.2" });
+  });
+
+  // Header actions — "📚 历史" 按钮：回欢迎页 + 切到历史 tab（不关闭当前任务）
+  $("#btnHistory").addEventListener("click", () => {
+    try {
+      // 如果当前没有 session，尝试从 currentSessionId 恢复（用户刷新后第一次点"历史"）
+      if (!App.session) {
+        const currentId = getCurrentSessionId();
+        if (currentId) {
+          const list = loadAllSessions();
+          const sess = list.find(s => s.id === currentId);
+          if (sess) {
+            App.session = sess;
+            App.annCounter = (sess.annotations || []).length;
+          }
+        }
+      }
+      // 如果有 session 就退出到欢迎页（保留 current 引用）
+      if (App.session) {
+        App.session = null;
+        App.annCounter = 0;
+        App.activeAnnId = null;
+        const $content = $("#contentRender");
+        if ($content) { $content.innerHTML = ""; $content.dataset.loaded = ""; }
+        $("#sidebar").classList.add("hidden");
+        $("#contentArea").classList.add("hidden");
+        $("#welcome").classList.remove("hidden");
+      }
+      $$("[data-welcome-tab]").forEach(b => b.classList.remove("active"));
+      const historyTab = $('[data-welcome-tab="history"]');
+      if (historyTab) historyTab.classList.add("active");
+      $$("[data-welcome-pane]").forEach(p => p.classList.add("hidden"));
+      const historyPane = $('[data-welcome-pane="history"]');
+      if (historyPane) historyPane.classList.remove("hidden");
+      renderHistoryList();
+      updateHeaderMeta();
+    } catch (err) {
+      console.error("btnHistory error", err);
+      toast("打开历史失败：" + err.message, 3000);
+    }
+  });
+
+  // Header actions — 新建：直接重置 + 持续 toast，不弹 modal（避免被环境吞掉）
+  $("#btnNew").addEventListener("click", () => {
+    try {
+      const wasWelcome = !App.session;
+      const annCount = App.session ? (App.session.annotations || []).length : 0;
+      // 直接重置，不弹任何 modal/toast 由用户点
+      resetToWelcome();
+      // 重置后给一个 2.5 秒的明确反馈
+      if (wasWelcome) {
+        toast("已回到欢迎页", 2500);
+      } else if (annCount > 0) {
+        toast(`已新建。${annCount} 条原标注已留在「历史任务」中。`, 2500);
+      } else {
+        toast("已新建会话，回到欢迎页", 2500);
+      }
+    } catch (err) {
+      console.error("btnNew error", err);
+      toast("新建失败：" + err.message, 4000);
+    }
+  });
+
+  $("#confirmCancel").addEventListener("click", closeConfirm);
+  $("#confirmOk").addEventListener("click", () => {
+    const cb = _confirmCallback;
+    closeConfirm();
+    if (typeof cb === "function") {
+      try { cb(); } catch (e) { console.error(e); toast("操作失败：" + e.message, 4000); }
+    }
+  });
+  $("#confirmModal").addEventListener("click", e => {
+    if (e.target === $("#confirmModal")) closeConfirm();
+  });
+
+  $("#btnExportJson").addEventListener("click", () => {
+    if (!App.session) { toast("当前无会话"); return; }
+    const blob = new Blob([JSON.stringify(App.session, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `annotator-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast("已下载 JSON 备份");
+  });
+
+  $("#btnImport").addEventListener("click", () => $("#fileImport").click());
+  $("#fileImport").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data.source || !Array.isArray(data.annotations)) throw new Error("文件格式不正确");
+        App.session = data;
+        App.annCounter = data.annotations.length;
+        saveSession();
+        enterWorkspace();
+        toast("已导入会话");
+      } catch (err) {
+        toast("导入失败：" + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  });
+
+  $("#btnExport").addEventListener("click", showExport);
+  $("#exportClose").addEventListener("click", hideExport);
+
+  $("#btnCopyExport").addEventListener("click", async () => {
+    const text = $("#exportPreview").textContent;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast("已复制到剪贴板");
+    } catch (e) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); toast("已复制到剪贴板"); }
+      catch (_) { toast("复制失败，请手动选择文本复制"); }
+      document.body.removeChild(ta);
+    }
+  });
+
+  $("#btnDownloadExport").addEventListener("click", () => {
+    const text = $("#exportPreview").textContent;
+    const blob = new Blob([text], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `annotations-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // Sidebar tabs
+  $$(".sidebar-tabs button[data-tab]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tab = btn.dataset.tab;
+      App.activeTab = tab;
+      $$(".sidebar-tabs button").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      $("#annotationList").classList.toggle("hidden", tab !== "annotations");
+      $("#revisionList").classList.toggle("hidden", tab !== "revisions");
+      $("#aiPanel").classList.toggle("hidden", tab !== "ai");
+    });
+  });
+
+  // Modal
+  $("#modalClose").addEventListener("click", closeAnnotationModal);
+  $("#modalCancel").addEventListener("click", closeAnnotationModal);
+  $("#modalSave").addEventListener("click", saveAnnotation);
+  $("#modalDelete").addEventListener("click", () => {
+    if (App.editingId) {
+      closeAnnotationModal();
+      deleteAnnotationById(App.editingId);
+    }
+  });
+  $$('input[name="annType"]').forEach(r => r.addEventListener("change", () => {
+    updateTypeUI();
+    syncRadioLabels();
+  }));
+
+  // AI panel
+  $("#btnParseAI").addEventListener("click", parseAIResponse);
+
+  // Annotation list delegation
+  $("#annotationList").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-act]");
+    if (!btn) return;
+    const item = btn.closest(".annotation-item");
+    if (!item) return;
+    const id = item.dataset.id;
+    const ann = App.session.annotations.find(a => a.id === id);
+    if (!ann) return;
+    const act = btn.dataset.act;
+    if (act === "jump") highlightAnnotationInContent(id);
+    else if (act === "edit") {
+      App.currentSelection = {
+        text: ann.selectedText,
+        before: ann.contextBefore,
+        after: ann.contextAfter
+      };
+      openAnnotationModal(ann);
+    } else if (act === "resolve") toggleResolve(id);
+    else if (act === "del") deleteAnnotationById(id);
+  });
+
+  // Prev/next
+  $("#btnPrev").addEventListener("click", () => navigateAnnotation(-1));
+  $("#btnNext").addEventListener("click", () => navigateAnnotation(1));
+  $("#btnReorder").addEventListener("click", () => {
+    reorderAnnotations();
+    saveSession();
+    render();
+    toast("已重排编号");
+  });
+
+  // Mark tools
+  $("#btnMarkRectFloat").addEventListener("click", () => setMarkTool("rect"));
+  $("#btnMarkArrowFloat").addEventListener("click", () => setMarkTool("arrow"));
+  $("#btnMarkClose").addEventListener("click", () => setMarkTool(null));
+  $("#markOverlay").addEventListener("mousedown", onMarkMouseDown);
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && _markTool) {
+      setMarkTool(null);
+    }
+  });
+
+  // Selection handling
+  document.addEventListener("mouseup", e => {
+    try {
+      const t = e.target;
+      // 防御：e.target 可能是 Text 节点（没有 closest）；做宽松判断
+      const inBlock = t && t.nodeType === 1 && t.closest(".tooltip, .sidebar, header, .modal, .welcome, .source-bar, input, textarea, button, .modal-backdrop");
+      if (inBlock) {
+        hideTooltip();
+        return;
+      }
+    } catch (_) { /* ignore */ }
+    setTimeout(() => {
+      try {
+        // mark 圈选的 currentSelection 由 onMarkMouseUp 设置（kind === "mark"），
+        // 全局 mouseup 之后才跑 getSelectionInfo() 会拿到空 selection，
+        // 不能直接清掉，否则 saveAnnotation 拿不到 markBox
+        if (App.currentSelection && App.currentSelection.kind === "mark") return;
+        const info = getSelectionInfo();
+        if (info && info.text.length >= 1) {
+          App.currentSelection = info;
+          const sel = window.getSelection();
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.top > 0) {
+            showTooltip(rect.left + rect.width / 2, rect.top);
+          }
+        } else {
+          hideTooltip();
+          App.currentSelection = null;
+        }
+      } catch (err) {
+        console.error("selection handling failed:", err);
+      }
+    }, 20);
+  });
+
+  $("#btnAddAnn").addEventListener("click", () => {
+    hideTooltip();
+    if (App.currentSelection) {
+      openAnnotationModal(null);
+    } else {
+      toast("请先在右侧内容中选中文字");
+    }
+  });
+
+  // Drag-and-drop file on welcome
+  const welcomeCard = $("#welcomeCard");
+  ["dragenter", "dragover"].forEach(ev => {
+    welcomeCard.addEventListener(ev, e => {
+      e.preventDefault();
+      welcomeCard.classList.add("welcome-dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach(ev => {
+    welcomeCard.addEventListener(ev, e => {
+      e.preventDefault();
+      welcomeCard.classList.remove("welcome-dragover");
+    });
+  });
+  welcomeCard.addEventListener("drop", e => {
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const text = ev.target.result;
+      if (file.name.endsWith(".md") || file.type.includes("markdown")) {
+        startSession({ type: "markdown", content: text, title: file.name });
+      } else if (file.name.endsWith(".html") || file.name.endsWith(".htm")) {
+        const titleMatch = text.match(/<title>(.*?)<\/title>/i);
+        const title = (titleMatch && titleMatch[1]) || file.name;
+        startSession({ type: "html", content: text, title: title.slice(0, 60) });
+      } else {
+        startSession({ type: "markdown", content: text, title: file.name });
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  // Workspace
+  if (isWorkspaceSupported()) {
+    $("#btnPickDir").addEventListener("click", pickWorkspaceDirectory);
+    $("#btnRefreshFiles").addEventListener("click", () => listWorkspaceFiles());
+    $("#btnDisconnectWS").addEventListener("click", disconnectWorkspace);
+    $("#fileList").addEventListener("click", e => {
+      const item = e.target.closest(".file-item");
+      if (!item) return;
+      const idx = parseInt(item.dataset.idx, 10);
+      loadFileFromWorkspace(idx);
+    });
+    // Show hint that last workspace is remembered
+    const lastWs = localStorage.getItem("wb-annotator-ws-name");
+    if (lastWs) {
+      const status = $("#workspaceStatus");
+      status.innerHTML = `
+        <span style="color:var(--text-muted);">上次使用：</span>
+        <span class="ws-path">📁 ${escapeHtml(lastWs)}/</span>
+        <span style="font-size:11px;color:var(--text-subtle);">（需重新授权）</span>
+      `;
+      status.classList.remove("hidden");
+    }
+  } else {
+    renderUnsupportedWorkspace();
+  }
+
+  // Tab close warning if there are open annotations
+  window.addEventListener("beforeunload", e => {
+    if (App.session && App.session.annotations.length > 0) {
+      const open = App.session.annotations.filter(a => a.status === "open").length;
+      if (open > 0) {
+        const msg = `当前有 ${open} 条未完成的标注，确认离开？\n（标注已自动保存到浏览器，但建议先点「保存」下载 JSON 备份）`;
+        e.preventDefault();
+        e.returnValue = msg;
+        return msg;
+      }
+    }
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") {
+      if (!$("#annModal").classList.contains("hidden")) closeAnnotationModal();
+      else if (!$("#exportModal").classList.contains("hidden")) hideExport();
+      else { hideTooltip(); window.getSelection().removeAllRanges(); }
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if (!$("#annModal").classList.contains("hidden")) saveAnnotation();
+    }
+    if (e.shiftKey && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+      if (App.session && !$("#annModal").classList.contains("hidden") === false) {
+        navigateAnnotation(e.key === "ArrowDown" ? 1 : -1);
+        e.preventDefault();
+      }
+    }
+  });
+
+  // Sidebar 折叠 / 展开
+  const applySidebarState = (state) => {
+    const sb = $("#sidebar");
+    if (!sb) return;
+    sb.classList.toggle("collapsed", state === "closed");
+  };
+  const initSidebar = localStorage.getItem(SIDEBAR_KEY) || "open";
+  applySidebarState(initSidebar);
+  $("#btnToggleSidebar").addEventListener("click", () => {
+    const sb = $("#sidebar");
+    const next = sb.classList.contains("collapsed") ? "open" : "closed";
+    sb.classList.toggle("collapsed", next === "closed");
+    try { localStorage.setItem(SIDEBAR_KEY, next); } catch (e) { /* ignore */ }
+  });
+}
+
+function navigateAnnotation(direction) {
+  if (!App.session) return;
+  const anns = App.session.annotations;
+  if (anns.length === 0) return;
+  let idx = anns.findIndex(a => a.id === App.activeAnnId);
+  if (idx < 0) idx = direction > 0 ? -1 : anns.length;
+  idx = (idx + direction + anns.length) % anns.length;
+  highlightAnnotationInContent(anns[idx].id);
+}
+
+/* ---------- Bootstrap ---------- */
+window.addEventListener("DOMContentLoaded", () => {
+  init();
+  const list = loadAllSessions();
+  const currentId = getCurrentSessionId();
+  const sess = currentId ? list.find(s => s.id === currentId) : null;
+  if (sess) {
+    App.session = sess;
+    App.annCounter = (sess.annotations || []).length;
+    enterWorkspace();
+  } else {
+    renderHistoryList(); // 没有当前 session 时也渲染历史 tab
+  }
+});
+</script>
+</body>
+</html>
