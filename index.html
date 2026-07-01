@@ -1521,6 +1521,7 @@ main {
       </div>
     </div>
     <div class="modal-footer">
+      <span class="modal-hint" style="margin-right:auto;color:var(--text-muted);font-size:11px;">Enter 保存 · Shift+Enter 换行 · Esc 取消</span>
       <button id="modalCancel" class="ghost">取消</button>
       <button id="modalDelete" class="danger hidden">删除</button>
       <button id="modalSave" class="primary">保存标注</button>
@@ -2530,6 +2531,26 @@ function openAnnotationModal(ann) {
   syncRadioLabels();
   $("#annModal").classList.remove("hidden");
   setTimeout(() => $("#annComment").focus(), 60);
+  // 4 个 textarea 统一：Enter 保存（无修饰键）；Shift+Enter 换行；Cmd/Ctrl+Enter 也保存
+  ["#proposedText", "#annComment", "#aiQuestion", "#annVerify"].forEach(sel => {
+    const el = $(sel);
+    if (!el || el._enterSaveBound) return;
+    el._enterSaveBound = true;
+    el.addEventListener("keydown", annModalEnterHandler);
+  });
+}
+
+// Enter 保存 handler（模块级函数，方便 add/removeEventListener 配对解绑）
+function annModalEnterHandler(e) {
+  // Enter 键（不含 IME composition）
+  if (e.key !== "Enter" || e.isComposing) return;
+  // Shift+Enter = 换行（不拦截，让浏览器默认行为）
+  if (e.shiftKey) return;
+  // Cmd/Ctrl+Enter = 保存（保留兼容）
+  // 其他修饰键（Alt 等）一律按"保存"处理
+  e.preventDefault();
+  e.stopPropagation();
+  saveAnnotation();
 }
 
 function formatMarkQuote(sel) {
@@ -2571,6 +2592,13 @@ function syncRadioLabels() {
 }
 
 function closeAnnotationModal() {
+  // 解绑 4 个 textarea 的 Enter 监听（避免对其他页面状态造成干扰）
+  ["#proposedText", "#annComment", "#aiQuestion", "#annVerify"].forEach(sel => {
+    const el = $(sel);
+    if (!el) return;
+    el.removeEventListener("keydown", annModalEnterHandler);
+    el._enterSaveBound = false;
+  });
   $("#annModal").classList.add("hidden");
   // 清掉浏览器里残留的选区（蓝色高亮），避免用户误以为还有选中的内容
   try { window.getSelection().removeAllRanges(); } catch (_) {}
