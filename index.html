@@ -2860,37 +2860,87 @@ function clearHighlights() {
 }
 
 // 不清的版本：用于批量标（不互相覆盖）
+// 支持跨 text node 选区（单段内跨 inline 元素、跨段落等）：
+// 选区起点可能在 STRONG/code/a 内的 text node，终点在另一个 text node，
+// 整体 selectedText 不在任一单节点里。跨段落时 selectedText 含 \n。
 function wrapTextInContent(text, order) {
   if (!text) return null;
   const container = $("#contentRender");
   if (!container) return null;
+  // 收集所有非 mark 内的 text node（按 DOM 顺序）
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
   const nodes = [];
   let n;
-  while ((n = walker.nextNode())) nodes.push(n);
-  for (const tn of nodes) {
-    // 跳过已经在 mark 里的 textNode（避免重复包）
-    if (tn.parentNode && tn.parentNode.tagName === "MARK") continue;
-    const idx = tn.textContent.indexOf(text);
-    if (idx >= 0) {
-      const range = document.createRange();
-      try {
-        range.setStart(tn, idx);
-        range.setEnd(tn, idx + text.length);
-      } catch (e) { continue; }
-      const mark = document.createElement("mark");
-      mark.className = "highlight";
-      if (order) mark.setAttribute("data-order", order);
-      mark.setAttribute("title", `标注 #${order}：${text.slice(0, 30)}${text.length > 30 ? "…" : ""}`);
-      try {
-        range.surroundContents(mark);
-        return mark;
-      } catch (e) {
-        return null;
-      }
-    }
+  while ((n = walker.nextNode())) {
+    if (n.parentNode && n.parentNode.tagName === "MARK") continue;
+    nodes.push(n);
   }
-  return null;
+  if (!nodes.length) return null;
+  // 拼成"虚拟全文"。join 时 block 边界无分隔符，所以下面要按行搜
+  const fullText = nodes.map(tn => tn.textContent).join("");
+  // 找 text 起点
+  let startIdx = -1, endIdx = -1;
+  if (text.includes("\n")) {
+    // 跨段落：按行顺序在 fullText 里找
+    const lines = text.split("\n");
+    let firstIdx = -1, pos = 0, ok = true;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line) continue; // 空行：跳过（视为分隔）
+      const found = i === 0 ? fullText.indexOf(line, pos) : fullText.indexOf(line, pos);
+      if (found < 0) { ok = false; break; }
+      if (i === 0) firstIdx = found;
+      pos = found + line.length;
+    }
+    if (!ok || firstIdx < 0) return null;
+    startIdx = firstIdx;
+    endIdx = pos;
+  } else {
+    startIdx = fullText.indexOf(text);
+    if (startIdx < 0) return null;
+    endIdx = startIdx + text.length;
+  }
+  // 映射回 (startNode, startOffset) / (endNode, endOffset)
+  let acc = 0, startNode = null, startOffset = 0, endNode = null, endOffset = 0;
+  for (const tn of nodes) {
+    const len = tn.textContent.length;
+    if (!startNode && acc + len > startIdx) {
+      startNode = tn;
+      startOffset = startIdx - acc;
+    }
+    if (acc + len >= endIdx) {
+      endNode = tn;
+      endOffset = endIdx - acc;
+      break;
+    }
+    acc += len;
+  }
+  if (!startNode || !endNode) return null;
+  // 构造 range（可能跨节点）
+  const range = document.createRange();
+  try {
+    range.setStart(startNode, startOffset);
+    range.setEnd(endNode, endOffset);
+  } catch (e) { return null; }
+  // 创建 mark
+  const mark = document.createElement("mark");
+  mark.className = "highlight";
+  if (order) mark.setAttribute("data-order", order);
+  mark.setAttribute("title", `标注 #${order}：${text.slice(0, 30)}${text.length > 30 ? "…" : ""}`);
+  try {
+    // surroundContents 在跨节点时会抛；改用 extractContents 拆出内容后塞进 mark
+    // 然后把 mark 插回原 range 位置。endNode === startNode 时退化为单节点环绕
+    if (startNode === endNode) {
+      range.surroundContents(mark);
+    } else {
+      const frag = range.extractContents();
+      mark.appendChild(frag);
+      range.insertNode(mark);
+    }
+    return mark;
+  } catch (e) {
+    return null;
+  }
 }
 
 function highlightTextInContent(text, order) {
@@ -2901,6 +2951,7 @@ function highlightTextInContent(text, order) {
 
 // 模糊定位：精确匹配失败时的兜底
 // 三步降级：contextBefore 末 30 字 → selectedText 前 12 字 → selectedText 末 12 字
+// 跨 text node 找（用 wrapTextInContent 同款 fullText 思路）
 function fuzzyLocateInContent(ann) {
   if (!ann || !ann.selectedText) return null;
   const container = $("#contentRender");
@@ -2917,44 +2968,61 @@ function fuzzyLocateInContent(ann) {
 
   // 拼候选种子（每条做 trim + 长度保护）
   const seeds = [];
-  const ctx = (ann.contextBefore || "").slice(-30).trim();
+  const ctx = (ann.contextBefore || "").replace(/\s+/g, " ").slice(-30).trim();
   if (ctx.length >= 6) seeds.push(ctx);
-  const head = ann.selectedText.slice(0, 12).trim();
+  const head = ann.selectedText.replace(/\s+/g, " ").slice(0, 12).trim();
   if (head.length >= 4) seeds.push(head);
-  const tail = ann.selectedText.slice(-12).trim();
+  const tail = ann.selectedText.replace(/\s+/g, " ").slice(-12).trim();
   if (tail.length >= 4 && tail !== head) seeds.push(tail);
 
   for (const seed of seeds) {
     const idx = fullText.indexOf(seed);
     if (idx < 0) continue;
-    // 找到了 seed 在全文里的位置 → 映射回 textNode + offset
-    let acc = 0, targetNode = null, targetOffset = 0;
+    // 找到了 seed 在全文里的位置 → 映射回 (startNode, startOffset)
+    let acc = 0, startNode = null, startOffset = 0;
     for (const tn of nodes) {
       const len = tn.textContent.length;
       if (acc + len > idx) {
-        targetNode = tn;
-        targetOffset = idx - acc;
+        startNode = tn;
+        startOffset = idx - acc;
         break;
       }
       acc += len;
     }
-    if (!targetNode) continue;
+    if (!startNode) continue;
     // 围绕命中点造一个 30 字符的 mark（让用户视觉确认"是不是这一段"）
-    const MARK_LEN = Math.min(30, fullText.length - idx);
+    // endNode 可能跨节点 → 同样用 extractContents 兜底
+    const MARK_LEN = 30;
+    const endIdx = Math.min(fullText.length, idx + seed.length + MARK_LEN);
+    let endNode = null, endOffset = 0;
+    acc = 0;
+    for (const tn of nodes) {
+      const len = tn.textContent.length;
+      if (acc + len >= endIdx) {
+        endNode = tn;
+        endOffset = endIdx - acc;
+        break;
+      }
+      acc += len;
+    }
+    if (!endNode) continue;
     const range = document.createRange();
     try {
-      range.setStart(targetNode, targetOffset);
-      // 末点可能跨 textNode，简化为只标起点的一段
-      const nodeText = targetNode.textContent;
-      const endOffset = Math.min(targetNode.length || nodeText.length, targetOffset + MARK_LEN);
-      range.setEnd(targetNode, endOffset);
+      range.setStart(startNode, startOffset);
+      range.setEnd(endNode, endOffset);
     } catch (e) { continue; }
     const mark = document.createElement("mark");
     mark.className = "highlight";
     if (ann.order) mark.setAttribute("data-order", ann.order);
     mark.setAttribute("title", `标注 #${ann.order}（模糊定位，原文已变动，请人工确认）`);
     try {
-      range.surroundContents(mark);
+      if (startNode === endNode) {
+        range.surroundContents(mark);
+      } else {
+        const frag = range.extractContents();
+        mark.appendChild(frag);
+        range.insertNode(mark);
+      }
       return mark;
     } catch (e) { continue; }
   }
