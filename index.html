@@ -157,6 +157,9 @@ main {
   flex: 1;
   min-width: 0;
   position: relative;  /* 让 .mark-toolbar-floating 相对 content-area 定位 */
+  display: flex;       /* 让 .content-scroll 的 flex:1 生效，撑出可滚动区域 */
+  flex-direction: column;
+  overflow: hidden;    /* 兜底：内容溢出时由 .content-scroll 处理，不让溢出到 main */
 }
 .sidebar {
   width: 360px;
