@@ -2899,6 +2899,68 @@ function highlightTextInContent(text, order) {
   return wrapTextInContent(text, order);
 }
 
+// 模糊定位：精确匹配失败时的兜底
+// 三步降级：contextBefore 末 30 字 → selectedText 前 12 字 → selectedText 末 12 字
+function fuzzyLocateInContent(ann) {
+  if (!ann || !ann.selectedText) return null;
+  const container = $("#contentRender");
+  if (!container) return null;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null, false);
+  const nodes = [];
+  let n;
+  while ((n = walker.nextNode())) {
+    if (n.parentNode && n.parentNode.tagName === "MARK") continue;
+    nodes.push(n);
+  }
+  if (!nodes.length) return null;
+  const fullText = nodes.map(tn => tn.textContent).join("");
+
+  // 拼候选种子（每条做 trim + 长度保护）
+  const seeds = [];
+  const ctx = (ann.contextBefore || "").slice(-30).trim();
+  if (ctx.length >= 6) seeds.push(ctx);
+  const head = ann.selectedText.slice(0, 12).trim();
+  if (head.length >= 4) seeds.push(head);
+  const tail = ann.selectedText.slice(-12).trim();
+  if (tail.length >= 4 && tail !== head) seeds.push(tail);
+
+  for (const seed of seeds) {
+    const idx = fullText.indexOf(seed);
+    if (idx < 0) continue;
+    // 找到了 seed 在全文里的位置 → 映射回 textNode + offset
+    let acc = 0, targetNode = null, targetOffset = 0;
+    for (const tn of nodes) {
+      const len = tn.textContent.length;
+      if (acc + len > idx) {
+        targetNode = tn;
+        targetOffset = idx - acc;
+        break;
+      }
+      acc += len;
+    }
+    if (!targetNode) continue;
+    // 围绕命中点造一个 30 字符的 mark（让用户视觉确认"是不是这一段"）
+    const MARK_LEN = Math.min(30, fullText.length - idx);
+    const range = document.createRange();
+    try {
+      range.setStart(targetNode, targetOffset);
+      // 末点可能跨 textNode，简化为只标起点的一段
+      const nodeText = targetNode.textContent;
+      const endOffset = Math.min(targetNode.length || nodeText.length, targetOffset + MARK_LEN);
+      range.setEnd(targetNode, endOffset);
+    } catch (e) { continue; }
+    const mark = document.createElement("mark");
+    mark.className = "highlight";
+    if (ann.order) mark.setAttribute("data-order", ann.order);
+    mark.setAttribute("title", `标注 #${ann.order}（模糊定位，原文已变动，请人工确认）`);
+    try {
+      range.surroundContents(mark);
+      return mark;
+    } catch (e) { continue; }
+  }
+  return null;
+}
+
 function highlightAnnotationInContent(id) {
   if (!App.session) return;
   const ann = App.session.annotations.find(a => a.id === id);
@@ -2936,8 +2998,17 @@ function highlightAnnotationInContent(id) {
     mark.scrollIntoView({ behavior: "smooth", block: "center" });
     mark.classList.add("flash");
     setTimeout(() => mark.classList.remove("flash"), 1600);
-  } else if (ann.selectedText) {
-    toast("选中文本在内容中未直接匹配（可能因修改过上下文），请用「定位」旁的人工查找", 2400);
+  } else {
+    // 精确匹配失败 → 模糊定位（用 context 或子串）
+    const fuzzy = fuzzyLocateInContent(ann);
+    if (fuzzy) {
+      fuzzy.scrollIntoView({ behavior: "smooth", block: "center" });
+      fuzzy.classList.add("flash");
+      setTimeout(() => fuzzy.classList.remove("flash"), 1600);
+      toast("原文已变动，按 context 定位（请人工确认）", 2400);
+    } else if (ann.selectedText) {
+      toast("无法自动定位，按 ⌘+F 搜「标注 #" + (ann.order || "?") + " + 关键文字」", 2400);
+    }
   }
 }
 
