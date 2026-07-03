@@ -1387,7 +1387,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v2.6 · 校对纸风格</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v2.9</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -1408,15 +1408,31 @@ main {
           把 Markdown / HTML 内容粘贴到下方，或加载示例开始。选中文字即可加标注，标注会按顺序保留并可一键导出给 AI；AI 回应后可粘贴回来自动勾选完成。
         </p>
         <div class="welcome-tabs">
-          <button data-welcome-tab="md" class="active">粘贴 Markdown</button>
+          <button data-welcome-tab="workspace" class="active">本地工作区</button>
+          <button data-welcome-tab="md">粘贴 Markdown</button>
           <button data-welcome-tab="html">粘贴 HTML</button>
           <button data-welcome-tab="url">通过 URL</button>
-          <button data-welcome-tab="workspace">本地工作区</button>
           <button data-welcome-tab="sample">加载示例</button>
           <button data-welcome-tab="history">历史任务</button>
         </div>
 
-        <div class="welcome-pane" data-welcome-pane="md">
+        <div class="welcome-pane" data-welcome-pane="workspace">
+          <div id="workspaceContainer">
+            <div class="welcome-hint">
+              连接本地工作区后，工具会列出该目录下的 <code>.md</code> / <code>.html</code> / <code>.htm</code> / <code>.txt</code> 文件。点击文件名即可加载并开始标注。<br>
+              <span style="color:var(--text-subtle);">需要 Chrome 86+ / Edge 86+（支持 File System Access API）。授权一次后目录名会被记住，下次不用重选。</span>
+            </div>
+            <div class="workspace-toolbar">
+              <button id="btnPickDir" class="primary">📁 选择工作区目录</button>
+              <button id="btnRefreshFiles" class="ghost" disabled>🔄 刷新文件</button>
+              <button id="btnDisconnectWS" class="ghost" disabled>断开</button>
+            </div>
+            <div id="workspaceStatus" class="hidden"></div>
+            <div id="fileList" class="file-list hidden"></div>
+          </div>
+        </div>
+
+        <div class="welcome-pane hidden" data-welcome-pane="md">
           <textarea id="mdInput" class="welcome-textarea" placeholder="# 标题&#10;&#10;在这里粘贴 Markdown 内容..."></textarea>
           <div class="welcome-actions">
             <button id="btnLoadMd" class="primary">加载并开始标注</button>
@@ -1447,22 +1463,6 @@ main {
           </p>
           <div class="welcome-actions">
             <button id="btnLoadSample" class="primary">加载示例</button>
-          </div>
-        </div>
-
-        <div class="welcome-pane hidden" data-welcome-pane="workspace">
-          <div id="workspaceContainer">
-            <div class="welcome-hint">
-              连接本地工作区后，工具会列出该目录下的 <code>.md</code> / <code>.html</code> / <code>.htm</code> / <code>.txt</code> 文件。点击文件名即可加载并开始标注。<br>
-              <span style="color:var(--text-subtle);">需要 Chrome 86+ / Edge 86+（支持 File System Access API）。授权一次后目录名会被记住，下次不用重选。</span>
-            </div>
-            <div class="workspace-toolbar">
-              <button id="btnPickDir" class="primary">📁 选择工作区目录</button>
-              <button id="btnRefreshFiles" class="ghost" disabled>🔄 刷新文件</button>
-              <button id="btnDisconnectWS" class="ghost" disabled>断开</button>
-            </div>
-            <div id="workspaceStatus" class="hidden"></div>
-            <div id="fileList" class="file-list hidden"></div>
           </div>
         </div>
 
