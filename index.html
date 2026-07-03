@@ -1216,6 +1216,20 @@ main {
   border-radius: 3px;
   font-size: 11px;
 }
+.welcome-hint-sub {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+  font-size: 11px;
+  color: var(--text-subtle);
+  line-height: 1.55;
+}
+.ws-secondary {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.ws-secondary.hidden { display: none; }
 .welcome-actions {
   margin-top: 14px;
   display: flex;
@@ -1419,13 +1433,15 @@ main {
         <div class="welcome-pane" data-welcome-pane="workspace">
           <div id="workspaceContainer">
             <div class="welcome-hint">
-              连接本地工作区后，工具会列出该目录下的 <code>.md</code> / <code>.html</code> / <code>.htm</code> / <code>.txt</code> 文件。点击文件名即可加载并开始标注。<br>
-              <span style="color:var(--text-subtle);">需要 Chrome 86+ / Edge 86+（支持 File System Access API）。授权一次后目录名会被记住，下次不用重选。</span>
+              工具会列出该目录下的 <code>.md</code> / <code>.html</code> / <code>.htm</code> / <code>.txt</code> 文件，点击文件名即可加载并开始标注。
+              <div class="welcome-hint-sub">需要 Chrome 86+ / Edge 86+（基于 File System Access API）。授权一次后目录名会被记住，下次不用重选。</div>
             </div>
             <div class="workspace-toolbar">
               <button id="btnPickDir" class="primary">📁 选择工作区目录</button>
-              <button id="btnRefreshFiles" class="ghost" disabled>🔄 刷新文件</button>
-              <button id="btnDisconnectWS" class="ghost" disabled>断开</button>
+              <span id="wsSecondaryActions" class="ws-secondary hidden">
+                <button id="btnRefreshFiles" class="ghost">🔄 刷新文件</button>
+                <button id="btnDisconnectWS" class="ghost">断开</button>
+              </span>
             </div>
             <div id="workspaceStatus" class="hidden"></div>
             <div id="fileList" class="file-list hidden"></div>
@@ -2005,10 +2021,10 @@ function formatRelativeTime(ts) {
 
 function renderWorkspaceStatus() {
   const status = $("#workspaceStatus");
+  const secondary = $("#wsSecondaryActions");
   if (!App.workspaceHandle) {
     status.classList.add("hidden");
-    $("#btnRefreshFiles").disabled = true;
-    $("#btnDisconnectWS").disabled = true;
+    secondary.classList.add("hidden");
     return;
   }
   status.innerHTML = `
@@ -2017,8 +2033,7 @@ function renderWorkspaceStatus() {
     <span style="font-size:11px;color:var(--text-subtle);">${App.workspaceFiles.length} 个文件</span>
   `;
   status.classList.remove("hidden");
-  $("#btnRefreshFiles").disabled = false;
-  $("#btnDisconnectWS").disabled = false;
+  secondary.classList.remove("hidden");
 }
 
 function renderUnsupportedWorkspace() {
