@@ -1003,6 +1003,70 @@ main {
   background: transparent;
 }
 
+/* v2.7 右侧抽屉（仅 #annModal 使用） */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  right: 420px;             /* 让出抽屉位置，避免遮住抽屉 */
+  background: rgba(0, 0, 0, 0.12);
+  z-index: 1999;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease-out;
+}
+.modal-mask:not(.hidden) {
+  opacity: 1;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.ann-drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: 420px;
+  max-width: 92vw;
+  height: 100vh;
+  background: var(--bg-elev);
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.08);
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ann-drawer:not(.hidden) {
+  transform: translateX(0);
+}
+/* 抽屉内复用 .modal 结构，去掉居中弹窗的圆角/阴影/动画 */
+.ann-drawer .modal {
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+  display: flex;
+  flex-direction: column;
+}
+.ann-drawer .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;            /* 允许内部滚动 */
+  overflow-y: auto;
+}
+.ann-drawer .modal-footer {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+  padding: 12px 18px;
+}
+.ann-drawer .modal-header {
+  flex-shrink: 0;
+  padding: 14px 18px;
+}
+
 .form-group { margin-bottom: 14px; }
 .form-group:last-child { margin-bottom: 0; }
 .form-group label {
@@ -1330,6 +1394,9 @@ main {
   .content-render { padding: 18px 20px; }
   .radio-group label { font-size: 11px; padding: 5px 8px; }
   .radio-group label .type-desc { display: none; }
+  /* 小屏：抽屉全屏 + mask 全屏 */
+  .ann-drawer { width: 100vw; max-width: 100vw; }
+  .modal-mask { right: 0; }
 }
 </style>
 </head>
@@ -1480,8 +1547,8 @@ main {
   <button id="btnAddAnn">+ 标注选区</button>
 </div>
 
-<!-- Annotation modal -->
-<div class="modal-backdrop hidden" id="annModal">
+<!-- Annotation modal (v2.7: 改为右侧 420px 抽屉，不遮挡正文) -->
+<div class="ann-drawer hidden" id="annModal">
   <div class="modal">
     <div class="modal-header">
       <h3 id="modalTitle">新建标注</h3>
@@ -1546,26 +1613,7 @@ main {
   </div>
 </div>
 
-<!-- Export modal -->
-<div class="modal-backdrop hidden" id="exportModal">
-  <div class="modal" style="max-width:760px;">
-    <div class="modal-header">
-      <h3>导出给 AI</h3>
-      <button class="modal-close" id="exportClose">✕</button>
-    </div>
-    <div class="modal-body">
-      <p style="font-size:12px;color:var(--text-muted);margin:0 0 12px 0;line-height:1.7;">
-        把下方内容复制发给 AI。AI 按编号回应后，把回应整段粘贴到右侧「AI 对话」面板可自动勾选完成。建议 AI 的回应格式：<br>
-        <code style="background:var(--bg-code);padding:2px 6px;border-radius:3px;font-size:11px;">标注 #1：已修改 → 改成 XXX</code>
-      </p>
-      <div class="export-preview" id="exportPreview"></div>
-    </div>
-    <div class="modal-footer">
-      <button id="btnDownloadExport" class="ghost">下载 .md</button>
-      <button id="btnCopyExport" class="primary">复制到剪贴板</button>
-    </div>
-  </div>
-</div>
+<div class="modal-mask hidden" id="annModalMask"></div>
 
 <script>
 "use strict";
@@ -2529,6 +2577,13 @@ function openAnnotationModal(ann) {
 
   updateTypeUI();
   syncRadioLabels();
+
+  // v2.7: 抽屉打开 = 侧栏暂时让位（保留用户之前的 collapsed 状态，仅临时 hidden）
+  const sidebar = $("#sidebar");
+  App._drawerPrevSidebarHidden = sidebar.classList.contains("hidden");
+  sidebar.classList.add("hidden");
+  $("#annModalMask").classList.remove("hidden");
+
   $("#annModal").classList.remove("hidden");
   setTimeout(() => $("#annComment").focus(), 60);
   // 4 个 textarea 统一：Enter 保存（无修饰键）；Shift+Enter 换行；Cmd/Ctrl+Enter 也保存
@@ -2600,6 +2655,12 @@ function closeAnnotationModal() {
     el._enterSaveBound = false;
   });
   $("#annModal").classList.add("hidden");
+  $("#annModalMask").classList.add("hidden");
+  // v2.7: 恢复侧栏（如果之前是显示的）
+  if (App._drawerPrevSidebarHidden === false) {
+    $("#sidebar").classList.remove("hidden");
+  }
+  App._drawerPrevSidebarHidden = null;
   // 清掉浏览器里残留的选区（蓝色高亮），避免用户误以为还有选中的内容
   try { window.getSelection().removeAllRanges(); } catch (_) {}
   App.editingId = null;
@@ -3234,19 +3295,6 @@ function buildExport() {
   return lines.join("\n") + "\n";
 }
 
-function showExport() {
-  if (!App.session || App.session.annotations.length === 0) {
-    toast("当前会话还没有标注");
-    return;
-  }
-  $("#exportPreview").textContent = buildExport();
-  $("#exportModal").classList.remove("hidden");
-}
-
-function hideExport() {
-  $("#exportModal").classList.add("hidden");
-}
-
 /* ---------- AI response parsing ---------- */
 function parseAIResponse() {
   const input = $("#aiResponseInput").value.trim();
@@ -3467,36 +3515,38 @@ function init() {
     e.target.value = "";
   });
 
-  $("#btnExport").addEventListener("click", showExport);
-  $("#exportClose").addEventListener("click", hideExport);
-
-  $("#btnCopyExport").addEventListener("click", async () => {
-    const text = $("#exportPreview").textContent;
-    try {
-      await navigator.clipboard.writeText(text);
-      toast("已复制到剪贴板");
-    } catch (e) {
+  // v2.7 简化：导出给 AI = 直接复制 + toast 提示，不再弹模态框预览
+  $("#btnExport").addEventListener("click", async () => {
+    if (!App.session || App.session.annotations.length === 0) {
+      toast("当前会话还没有标注");
+      return;
+    }
+    const text = buildExport();
+    const fallbackCopy = () => {
+      // 老浏览器 / 非安全上下文下 navigator.clipboard 可能不可用
       const ta = document.createElement("textarea");
       ta.value = text;
       ta.style.position = "fixed";
       ta.style.left = "-9999px";
       document.body.appendChild(ta);
       ta.select();
-      try { document.execCommand("copy"); toast("已复制到剪贴板"); }
-      catch (_) { toast("复制失败，请手动选择文本复制"); }
+      let ok = false;
+      try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
       document.body.removeChild(ta);
+      return ok;
+    };
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch (_) {
+      ok = fallbackCopy();
     }
-  });
-
-  $("#btnDownloadExport").addEventListener("click", () => {
-    const text = $("#exportPreview").textContent;
-    const blob = new Blob([text], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `annotations-${Date.now()}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
+    if (ok) {
+      toast(`已复制 ${App.session.annotations.length} 条标注到剪贴板，粘贴给 AI`);
+    } else {
+      toast("复制失败，请检查浏览器权限");
+    }
   });
 
   // Sidebar tabs
@@ -3515,6 +3565,8 @@ function init() {
   // Modal
   $("#modalClose").addEventListener("click", closeAnnotationModal);
   $("#modalCancel").addEventListener("click", closeAnnotationModal);
+  // v2.7: 点遮罩关闭抽屉
+  $("#annModalMask").addEventListener("click", closeAnnotationModal);
   $("#modalSave").addEventListener("click", saveAnnotation);
   $("#modalDelete").addEventListener("click", () => {
     if (App.editingId) {
@@ -3694,7 +3746,6 @@ function init() {
   document.addEventListener("keydown", e => {
     if (e.key === "Escape") {
       if (!$("#annModal").classList.contains("hidden")) closeAnnotationModal();
-      else if (!$("#exportModal").classList.contains("hidden")) hideExport();
       else { hideTooltip(); window.getSelection().removeAllRanges(); }
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
