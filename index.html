@@ -162,13 +162,14 @@ main {
   overflow: hidden;    /* 兜底：内容溢出时由 .content-scroll 处理，不让溢出到 main */
 }
 .sidebar {
-  width: 360px;
+  width: 420px;            /* v2.8: 与右侧抽屉 420px 等宽，视觉上形成统一方块 */
   background: var(--bg-elev);
   border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
   order: 2;  /* 移到右侧 —— 像在文档右边缘贴便签 */
+  z-index: 2001;           /* v2.8: 抽屉打开时不隐藏侧栏，必须盖在 mask(1999)/抽屉(2000) 之上 */
   transition: width 0.22s ease, border-color 0.22s ease;
   overflow: hidden;
   position: relative;
@@ -1003,11 +1004,11 @@ main {
   background: transparent;
 }
 
-/* v2.7 右侧抽屉（仅 #annModal 使用） */
+/* v2.7 右侧抽屉（v2.8: 与侧栏并排等高等宽，让出宽度 = 侧栏 420 + 抽屉 420 = 840） */
 .modal-mask {
   position: fixed;
   inset: 0;
-  right: 420px;             /* 让出抽屉位置，避免遮住抽屉 */
+  right: 840px;             /* v2.8: 让出侧栏(420) + 抽屉(420)，mask 只覆盖正文区 */
   background: rgba(0, 0, 0, 0.12);
   z-index: 1999;
   opacity: 0;
@@ -1065,6 +1066,23 @@ main {
 .ann-drawer .modal-header {
   flex-shrink: 0;
   padding: 14px 18px;
+}
+
+/* v2.8: 抽屉打开时侧栏脱离 main 流变 100vh fixed，与抽屉严格等高 */
+.sidebar.drawer-open {
+  position: fixed;
+  top: 0;
+  right: 420px;            /* 紧贴抽屉左边，与抽屉视觉无缝 */
+  width: 420px;
+  height: 100vh;           /* 与抽屉等高 100vh */
+  z-index: 2001;
+  border-left: 1px solid var(--border);
+  /* 不加 box-shadow，避免与抽屉阴影叠加成双重暗影 */
+}
+/* 抽屉打开时 content-area 让出侧栏 420px 宽度，保持阅读区宽度不变 */
+.content-area.drawer-open {
+  margin-right: 420px;
+  transition: margin-right 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .form-group { margin-bottom: 14px; }
@@ -2578,10 +2596,12 @@ function openAnnotationModal(ann) {
   updateTypeUI();
   syncRadioLabels();
 
-  // v2.7: 抽屉打开 = 侧栏暂时让位（保留用户之前的 collapsed 状态，仅临时 hidden）
-  const sidebar = $("#sidebar");
-  App._drawerPrevSidebarHidden = sidebar.classList.contains("hidden");
-  sidebar.classList.add("hidden");
+  // v2.8: 抽屉打开 = 侧栏脱离 main 流变 100vh fixed，与抽屉严格等高并排成统一方块
+  // 尊重用户主动折叠的意愿：collapsed 态 (52px) 保持折叠，不强制展开
+  if (!$("#sidebar").classList.contains("collapsed")) {
+    $("#sidebar").classList.add("drawer-open");
+    $("#contentArea").classList.add("drawer-open");
+  }
   $("#annModalMask").classList.remove("hidden");
 
   $("#annModal").classList.remove("hidden");
@@ -2656,11 +2676,9 @@ function closeAnnotationModal() {
   });
   $("#annModal").classList.add("hidden");
   $("#annModalMask").classList.add("hidden");
-  // v2.7: 恢复侧栏（如果之前是显示的）
-  if (App._drawerPrevSidebarHidden === false) {
-    $("#sidebar").classList.remove("hidden");
-  }
-  App._drawerPrevSidebarHidden = null;
+  // v2.8: 侧栏恢复 main 流，不再 fixed 100vh
+  $("#sidebar").classList.remove("drawer-open");
+  $("#contentArea").classList.remove("drawer-open");
   // 清掉浏览器里残留的选区（蓝色高亮），避免用户误以为还有选中的内容
   try { window.getSelection().removeAllRanges(); } catch (_) {}
   App.editingId = null;
