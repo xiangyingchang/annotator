@@ -795,22 +795,16 @@ main {
   vector-effect: non-scaling-stroke;
 }
 .mark-overlay svg .mark-shape.pending {
-  fill: rgba(255, 87, 34, 0.12);
+  fill: rgba(255, 87, 34, 0.18);
   stroke: #ff5722;
   stroke-width: 3;
   stroke-dasharray: 8 4;
   vector-effect: non-scaling-stroke;
-  animation: markPendingBreathe 1.8s ease-in-out infinite;
 }
 .mark-overlay svg .mark-arrow.pending {
   stroke-width: 3;
   stroke-dasharray: 8 4;
   vector-effect: non-scaling-stroke;
-  animation: markPendingBreathe 1.8s ease-in-out infinite;
-}
-@keyframes markPendingBreathe {
-  0%, 100% { stroke-opacity: 1; fill-opacity: 0.12; }
-  50% { stroke-opacity: 0.5; fill-opacity: 0.22; }
 }
 /* 编号徽章改为 HTML 渲染：不受 SVG viewBox 拉伸影响，圆形不会变椭圆 */
 .mark-overlay .mark-num-html {
@@ -1460,7 +1454,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.5</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.6</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
