@@ -1474,7 +1474,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.7</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.8</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -2517,12 +2517,12 @@ function renderMarkOverlay(draftHtml = "") {
     const cls = `mark-num-html${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
     const nx = m.markBox.x1 * ow;
     const ny = m.markBox.y1 * oh;
-    // 终点 HTML 箭头：根据线段方向旋转
-    const dx = m.markBox.x2 - m.markBox.x1;
-    const dy = m.markBox.y2 - m.markBox.y1;
-    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
     const ex = m.markBox.x2 * ow;
     const ey = m.markBox.y2 * oh;
+    // 终点 HTML 箭头三角：用「像素坐标」算角度，才能和被 preserveAspectRatio="none"
+    // 拉伸后的线段视觉方向一致（x/y 缩放比例不同，归一化坐标算出的角度会偏）。
+    // CSS border 三角默认 apex 朝上(-90°)，需在 atan2 角度基础上 +90°。
+    const angle = Math.atan2(ey - ny, ex - nx) * 180 / Math.PI + 90;
     const tipCls = `mark-arrow-tip${completed ? " completed" : ""}${pending ? " pending" : ""}`;
     return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`
          + `<div class="${tipCls}" style="left:${ex}px;top:${ey}px;transform:translate(-50%,-50%) rotate(${angle}deg)"></div>`;
