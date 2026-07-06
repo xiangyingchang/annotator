@@ -794,6 +794,24 @@ main {
   stroke-dasharray: 4 2;
   vector-effect: non-scaling-stroke;
 }
+.mark-overlay svg .mark-shape.pending {
+  fill: rgba(255, 87, 34, 0.12);
+  stroke: #ff5722;
+  stroke-width: 3;
+  stroke-dasharray: 8 4;
+  vector-effect: non-scaling-stroke;
+  animation: markPendingBreathe 1.8s ease-in-out infinite;
+}
+.mark-overlay svg .mark-arrow.pending {
+  stroke-width: 3;
+  stroke-dasharray: 8 4;
+  vector-effect: non-scaling-stroke;
+  animation: markPendingBreathe 1.8s ease-in-out infinite;
+}
+@keyframes markPendingBreathe {
+  0%, 100% { stroke-opacity: 1; fill-opacity: 0.12; }
+  50% { stroke-opacity: 0.5; fill-opacity: 0.22; }
+}
 .mark-overlay svg .mark-num {
   fill: white;
   font-size: 16px;
@@ -1412,7 +1430,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.2</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.3</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -2424,7 +2442,19 @@ function renderMarkOverlay(draftHtml = "") {
   const arrowDefs = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#ff5722"/></marker><marker id="arrowhead-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4caf50"/></marker></defs>`;
   const viewBox = `viewBox="0 0 1000 1000" preserveAspectRatio="none"`;
   const marksSvg = marks.map(markAnnotationToSvg).join("");
-  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${draftHtml}</svg>`;
+  // 圈选完成但批注尚未保存 → 渲染 pending mark，让框留在页面上
+  let pendingSvg = "";
+  if (App.currentSelection && App.currentSelection.kind === "mark" && App.currentSelection.markBox) {
+    pendingSvg = markAnnotationToSvg({
+      markKind: App.currentSelection.markKind,
+      markBox: App.currentSelection.markBox,
+      status: "open",
+      order: "…",
+      id: "__pending__",
+      _pending: true
+    });
+  }
+  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${pendingSvg}${draftHtml}</svg>`;
 }
 
 // renderContent 用 render.innerHTML = X 会清掉 contentRender 内的 markOverlay，
@@ -2444,12 +2474,14 @@ function markAnnotationToSvg(m) {
   const isArrow = m.markKind === "arrow";
   const completed = m.status === "resolved";
   const active = App.activeAnnId === m.id;
-  const shapeCls = `mark-shape${completed ? " completed" : ""}${active ? " flash" : ""}`;
+  const pending = m._pending;
+  const shapeCls = `mark-shape${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
+  const arrowCls = `mark-arrow${completed ? " completed" : ""}${pending ? " pending" : ""}`;
   if (isArrow) {
     const { x1, y1, x2, y2 } = m.markBox;
     return `<g data-ann-id="${m.id}">
       <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${shapeCls}" fill="none" stroke="none"/>
-      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="mark-arrow${completed ? " completed" : ""}" marker-end="url(#${completed ? "arrowhead-done" : "arrowhead"})"/>
+      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${arrowCls}" marker-end="url(#${completed ? "arrowhead-done" : "arrowhead"})"/>
       <circle cx="${x1*1000}" cy="${y1*1000}" r="14" class="mark-num"/>
       <text x="${x1*1000}" y="${y1*1000}" class="mark-num" text-anchor="middle" dominant-baseline="central" stroke="none">${m.order}</text>
     </g>`;
@@ -2669,6 +2701,8 @@ function closeAnnotationModal() {
   try { window.getSelection().removeAllRanges(); } catch (_) {}
   App.editingId = null;
   App.currentSelection = null;
+  // 清掉 pending mark（圈选了但取消保存的情况）
+  renderMarkOverlay();
 }
 
 let _confirmCallback = null;
