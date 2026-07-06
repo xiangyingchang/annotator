@@ -1460,7 +1460,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.4</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.5</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -2491,24 +2491,18 @@ function renderMarkOverlay(draftHtml = "") {
   const marksSvg = marks.map(markAnnotationToSvg).join("");
   const pendingSvg = pendingMark ? markAnnotationToSvg(pendingMark) : "";
 
-  // HTML 编号徽章：用 overlay 像素坐标定位，不受 SVG viewBox 拉伸影响
+  // HTML 编号徽章：只给箭头标注画（起点圆形），矩形不画（避免遮挡中间文字）
   const rect = overlay.getBoundingClientRect();
   const ow = rect.width || overlay.clientWidth || 1;
   const oh = rect.height || overlay.clientHeight || 1;
-  const numBadges = allMarks.map(m => {
-    const isArrow = m.markKind === "arrow";
-    let nx, ny;
-    if (isArrow) {
-      nx = m.markBox.x1 * ow;
-      ny = m.markBox.y1 * oh;
-    } else {
-      nx = (m.markBox.x + m.markBox.w / 2) * ow;
-      ny = (m.markBox.y + m.markBox.h / 2) * oh;
-    }
+  const arrowMarks = allMarks.filter(m => m.markKind === "arrow");
+  const numBadges = arrowMarks.map(m => {
     const completed = m.status === "resolved";
     const active = App.activeAnnId === m.id;
     const pending = m._pending;
     const cls = `mark-num-html${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
+    const nx = m.markBox.x1 * ow;
+    const ny = m.markBox.y1 * oh;
     return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`;
   }).join("");
 
