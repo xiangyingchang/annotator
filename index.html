@@ -755,27 +755,37 @@ main {
   overflow: visible;
 }
 .mark-overlay svg .mark-shape {
-  fill: rgba(255, 87, 34, 0.08);
+  fill: rgba(255, 87, 34, 0.18);
   stroke: #ff5722;
-  stroke-width: 2;
+  stroke-width: 3;
   vector-effect: non-scaling-stroke;
 }
 .mark-overlay svg .mark-shape.completed {
-  fill: rgba(76, 175, 80, 0.08);
+  fill: rgba(76, 175, 80, 0.15);
   stroke: #4caf50;
 }
 .mark-overlay svg .mark-shape.flash {
-  stroke-width: 4;
-  filter: drop-shadow(0 0 6px #ff5722);
+  stroke-width: 5;
+  filter: drop-shadow(0 0 8px #ff5722);
+  animation: markPulse 1.2s ease-out 2;
+}
+@keyframes markPulse {
+  0%, 100% { stroke-opacity: 1; fill-opacity: 1; }
+  50% { stroke-opacity: 0.4; fill-opacity: 0.5; }
 }
 .mark-overlay svg .mark-arrow {
   stroke: #ff5722;
-  stroke-width: 2;
+  stroke-width: 3;
   fill: none;
   vector-effect: non-scaling-stroke;
 }
 .mark-overlay svg .mark-arrow.completed {
   stroke: #4caf50;
+}
+.mark-overlay svg .mark-arrow.flash {
+  stroke-width: 5;
+  filter: drop-shadow(0 0 8px #ff5722);
+  animation: markPulse 1.2s ease-out 2;
 }
 .mark-overlay svg .mark-draft {
   fill: rgba(255, 87, 34, 0.15);
@@ -785,12 +795,13 @@ main {
   vector-effect: non-scaling-stroke;
 }
 .mark-overlay svg .mark-num {
-  fill: #ff5722;
-  font-size: 14px;
-  font-weight: 600;
+  fill: white;
+  font-size: 16px;
+  font-weight: 700;
   paint-order: stroke;
-  stroke: white;
-  stroke-width: 3;
+  stroke: #ff5722;
+  stroke-width: 4;
+  stroke-linejoin: round;
 }
 
 .content-scroll {
@@ -1401,7 +1412,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v2.9</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.2</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
