@@ -773,20 +773,6 @@ main {
   0%, 100% { stroke-opacity: 1; fill-opacity: 1; }
   50% { stroke-opacity: 0.4; fill-opacity: 0.5; }
 }
-.mark-overlay svg .mark-arrow {
-  stroke: #ff5722;
-  stroke-width: 3;
-  fill: none;
-  vector-effect: non-scaling-stroke;
-}
-.mark-overlay svg .mark-arrow.completed {
-  stroke: #4caf50;
-}
-.mark-overlay svg .mark-arrow.flash {
-  stroke-width: 5;
-  filter: drop-shadow(0 0 8px #ff5722);
-  animation: markPulse 1.2s ease-out 2;
-}
 .mark-overlay svg .mark-draft {
   fill: rgba(255, 87, 34, 0.15);
   stroke: #ff5722;
@@ -800,70 +786,6 @@ main {
   stroke-width: 3;
   stroke-dasharray: 8 4;
   vector-effect: non-scaling-stroke;
-}
-.mark-overlay svg .mark-arrow.pending {
-  stroke-width: 3;
-  stroke-dasharray: 8 4;
-  vector-effect: non-scaling-stroke;
-}
-/* 编号徽章改为 HTML 渲染：不受 SVG viewBox 拉伸影响，圆形不会变椭圆 */
-.mark-overlay .mark-num-html {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid #ff5722;
-  color: #ff5722;
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 22px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-  z-index: 2;
-  box-sizing: border-box;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-/* 箭头终点三角：HTML 元素 + CSS border 画三角形，旋转跟随线段方向；不受 SVG viewBox 拉伸 */
-.mark-overlay .mark-arrow-tip {
-  position: absolute;
-  width: 0;
-  height: 0;
-  border-left: 7px solid transparent;
-  border-right: 7px solid transparent;
-  border-bottom: 12px solid #ff5722;
-  transform-origin: center center;
-  pointer-events: none;
-  z-index: 2;
-}
-.mark-overlay .mark-arrow-tip.completed {
-  border-bottom-color: #4caf50;
-}
-.mark-overlay .mark-arrow-tip.pending {
-  border-bottom-color: #ff5722;
-}
-.mark-overlay .mark-num-html.completed {
-  border-color: #4caf50;
-  color: #4caf50;
-}
-.mark-overlay .mark-num-html.pending {
-  border-style: dashed;
-  border-color: #ff5722;
-  color: #fff;
-  background: #ff5722;
-  font-size: 20px;
-  line-height: 22px;
-}
-.mark-overlay .mark-num-html.flash {
-  animation: markNumPulse 1.2s ease-out 2;
-}
-@keyframes markNumPulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.25); }
 }
 
 .content-scroll {
@@ -1474,7 +1396,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.8</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.9</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -1654,10 +1576,9 @@ main {
         </div>
       </div>
 
-      <!-- Floating mark toolbar (rectangle / arrow) —— 常驻精简态：默认仅显示两个入口按钮 -->
+      <!-- Floating mark toolbar (rectangle) -->
       <div class="mark-toolbar-floating" id="markToolbarFloating">
         <button id="btnMarkRectFloat" class="mark-btn ghost" title="矩形圈选（拖拽画矩形）">▭ 矩形</button>
-        <button id="btnMarkArrowFloat" class="mark-btn ghost" title="箭头标注（拖拽画箭头）">↗ 箭头</button>
         <span class="mark-cursor-hint" id="markHintFloat"></span>
         <button id="btnMarkClose" class="mark-btn ghost mark-close-btn" title="关闭圈选模式 (Esc)">✕</button>
       </div>
@@ -1752,7 +1673,7 @@ const TYPES = {
   replace:  { label: "替换",   desc: "把选区改成新文本" },
   delete:   { label: "删除",   desc: "删除选区" },
   insert:   { label: "插入",   desc: "在选区后插入新内容" },
-  mark:     { label: "圈选",   desc: "用矩形或箭头圈出区域" },
+  mark:     { label: "圈选",   desc: "用矩形圈出区域" },
   question: { label: "提问 AI", desc: "向 AI 提问" }
 };
 
@@ -2367,7 +2288,7 @@ function resetToWelcome() {
 }
 
 /* ---------- Mark 圈选 ---------- */
-let _markTool = null;       // 'rect' | 'arrow' | null
+let _markTool = null;       // 'rect' | null
 let _markDrag = null;       // { startX, startY, currentX, currentY, box }
 
 function setMarkTool(tool) {
@@ -2376,10 +2297,9 @@ function setMarkTool(tool) {
   const hint = $("#markHintFloat");
   const bar = $("#markToolbarFloating");
   $("#btnMarkRectFloat").classList.toggle("active", _markTool === "rect");
-  $("#btnMarkArrowFloat").classList.toggle("active", _markTool === "arrow");
   if (_markTool) {
     overlay.classList.add("tool-active");
-    hint.textContent = _markTool === "rect" ? "拖拽画矩形" : "拖拽画箭头";
+    hint.textContent = "拖拽画矩形";
     if (bar) {
       bar.classList.add("is-active");
       // 激活态：hint 不空，close 按钮显示
@@ -2425,44 +2345,29 @@ function onMarkMouseUp(e) {
   _markDrag = null;
   const dx = d.currentX - d.startX;
   const dy = d.currentY - d.startY;
-  // 箭头需要更长（≥30px），否则编号圆形 + 箭头标记会挤成一坨；矩形保持 8px
-  const minLen = _markTool === "arrow" ? 30 : 8;
-  if (Math.hypot(dx, dy) < minLen) {
+  if (Math.hypot(dx, dy) < 8) {
     renderMarkOverlay();
     return;
   }
   const boxW = d.w, boxH = d.h;
-  const markBox = _markTool === "arrow"
-    ? {
-        x1: clamp01(d.startX / boxW),
-        y1: clamp01(d.startY / boxH),
-        x2: clamp01(d.currentX / boxW),
-        y2: clamp01(d.currentY / boxH)
-      }
-    : {
-        x: clamp01(Math.min(d.startX, d.currentX) / boxW),
-        y: clamp01(Math.min(d.startY, d.currentY) / boxH),
-        w: clamp01(Math.abs(dx) / boxW),
-        h: clamp01(Math.abs(dy) / boxH)
-      };
+  const markBox = {
+    x: clamp01(Math.min(d.startX, d.currentX) / boxW),
+    y: clamp01(Math.min(d.startY, d.currentY) / boxH),
+    w: clamp01(Math.abs(dx) / boxW),
+    h: clamp01(Math.abs(dy) / boxH)
+  };
   // ★ 反查端点对应原文片段（用 viewport 像素坐标）
   const overlay = $("#markOverlay");
   const overlayRect = overlay.getBoundingClientRect();
-  let startAnchor = "", endAnchor = "", areaAnchor = "";
-  if (_markTool === "arrow") {
-    startAnchor = pickTextFromPoint(d.startX + overlayRect.left, d.startY + overlayRect.top);
-    endAnchor = pickTextFromPoint(d.currentX + overlayRect.left, d.currentY + overlayRect.top);
-  } else {
-    // 矩形取中心点
-    const cx = (d.startX + d.currentX) / 2 + overlayRect.left;
-    const cy = (d.startY + d.currentY) / 2 + overlayRect.top;
-    areaAnchor = pickTextFromPoint(cx, cy);
-  }
+  // 矩形取中心点
+  const cx = (d.startX + d.currentX) / 2 + overlayRect.left;
+  const cy = (d.startY + d.currentY) / 2 + overlayRect.top;
+  const areaAnchor = pickTextFromPoint(cx, cy);
   App.currentSelection = {
     kind: "mark",
-    markKind: _markTool,
+    markKind: "rect",
     markBox,
-    startAnchor, endAnchor, areaAnchor
+    areaAnchor
   };
   setMarkTool(null);
   openAnnotationModal(null);
@@ -2474,9 +2379,7 @@ function drawMarkDraft() {
   // d.* 是 overlay 屏幕像素；SVG viewBox 0-1000 拉伸到 overlay 实际尺寸，需换算
   const sx = 1000 / d.w;
   const sy = 1000 / d.h;
-  const draft = _markTool === "arrow"
-    ? `<line x1="${d.startX * sx}" y1="${d.startY * sy}" x2="${d.currentX * sx}" y2="${d.currentY * sy}" class="mark-draft" marker-end="url(#arrowhead)"/>`
-    : `<rect x="${Math.min(d.startX, d.currentX) * sx}" y="${Math.min(d.startY, d.currentY) * sy}" width="${Math.abs(d.currentX - d.startX) * sx}" height="${Math.abs(d.currentY - d.startY) * sy}" class="mark-draft"/>`;
+  const draft = `<rect x="${Math.min(d.startX, d.currentX) * sx}" y="${Math.min(d.startY, d.currentY) * sy}" width="${Math.abs(d.currentX - d.startX) * sx}" height="${Math.abs(d.currentY - d.startY) * sy}" class="mark-draft"/>`;
   renderMarkOverlay(draft);
 }
 
@@ -2485,15 +2388,14 @@ function renderMarkOverlay(draftHtml = "") {
   if (!overlay) return;
   const anns = App.session ? App.session.annotations : [];
   const marks = anns.filter(a => a.type === "mark" && a.markBox);
-  const arrowDefs = ``;  // 不再用 SVG marker（被 preserveAspectRatio 拉伸变形），改用 HTML 三角形
   const viewBox = `viewBox="0 0 1000 1000" preserveAspectRatio="none"`;
 
-  // 收集所有 mark（含 pending），用于生成 HTML 编号徽章和 HTML 箭头
+  // 收集所有 mark（含 pending），用于渲染
   const allMarks = marks.map(m => ({ ...m, _pending: false }));
   let pendingMark = null;
   if (App.currentSelection && App.currentSelection.kind === "mark" && App.currentSelection.markBox) {
     pendingMark = {
-      markKind: App.currentSelection.markKind,
+      markKind: "rect",
       markBox: App.currentSelection.markBox,
       status: "open",
       order: "+",
@@ -2505,30 +2407,7 @@ function renderMarkOverlay(draftHtml = "") {
   const marksSvg = marks.map(markAnnotationToSvg).join("");
   const pendingSvg = pendingMark ? markAnnotationToSvg(pendingMark) : "";
 
-  // HTML 编号徽章 + HTML 箭头三角：起点圆形 + 终点旋转的三角形，都用 overlay 像素坐标，不受 SVG 拉伸影响
-  const rect = overlay.getBoundingClientRect();
-  const ow = rect.width || overlay.clientWidth || 1;
-  const oh = rect.height || overlay.clientHeight || 1;
-  const arrowMarks = allMarks.filter(m => m.markKind === "arrow");
-  const numBadges = arrowMarks.map(m => {
-    const completed = m.status === "resolved";
-    const active = App.activeAnnId === m.id;
-    const pending = m._pending;
-    const cls = `mark-num-html${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
-    const nx = m.markBox.x1 * ow;
-    const ny = m.markBox.y1 * oh;
-    const ex = m.markBox.x2 * ow;
-    const ey = m.markBox.y2 * oh;
-    // 终点 HTML 箭头三角：用「像素坐标」算角度，才能和被 preserveAspectRatio="none"
-    // 拉伸后的线段视觉方向一致（x/y 缩放比例不同，归一化坐标算出的角度会偏）。
-    // CSS border 三角默认 apex 朝上(-90°)，需在 atan2 角度基础上 +90°。
-    const angle = Math.atan2(ey - ny, ex - nx) * 180 / Math.PI + 90;
-    const tipCls = `mark-arrow-tip${completed ? " completed" : ""}${pending ? " pending" : ""}`;
-    return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`
-         + `<div class="${tipCls}" style="left:${ex}px;top:${ey}px;transform:translate(-50%,-50%) rotate(${angle}deg)"></div>`;
-  }).join("");
-
-  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${pendingSvg}${draftHtml}</svg>${numBadges}`;
+  overlay.innerHTML = `<svg ${viewBox}>${marksSvg}${pendingSvg}${draftHtml}</svg>`;
 }
 
 // renderContent 用 render.innerHTML = X 会清掉 contentRender 内的 markOverlay，
@@ -2545,20 +2424,10 @@ function rebindMarkOverlay() {
 }
 
 function markAnnotationToSvg(m) {
-  const isArrow = m.markKind === "arrow";
   const completed = m.status === "resolved";
   const active = App.activeAnnId === m.id;
   const pending = m._pending;
   const shapeCls = `mark-shape${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
-  const arrowCls = `mark-arrow${completed ? " completed" : ""}${pending ? " pending" : ""}`;
-  if (isArrow) {
-    const { x1, y1, x2, y2 } = m.markBox;
-    // 编号徽章 + 终点箭头都改用 HTML（不受 SVG preserveAspectRatio="none" 拉伸影响）
-    return `<g data-ann-id="${m.id}">
-      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${shapeCls}" fill="none" stroke="none"/>
-      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${arrowCls}"/>
-    </g>`;
-  }
   const { x, y, w, h } = m.markBox;
   return `<g data-ann-id="${m.id}">
     <rect x="${x*1000}" y="${y*1000}" width="${w*1000}" height="${h*1000}" class="${shapeCls}"/>
@@ -2724,11 +2593,6 @@ function annModalEnterHandler(e) {
 function formatMarkQuote(sel) {
   const m = sel.mark || sel;
   const orderLabel = m.order ? `#${m.order}` : "";
-  if (m.markKind === "arrow" || m.markBox && m.markBox.x2 !== undefined) {
-    const from = m.startAnchor || `起点`;
-    const to = m.endAnchor || `终点`;
-    return `↗ 箭头${orderLabel} · "${from}" → "${to}"`;
-  }
   const where = m.areaAnchor || `矩形区域`;
   return `▭ 矩形${orderLabel} · "${where}"`;
 }
@@ -2831,17 +2695,13 @@ function saveAnnotation() {
     };
     if (sel.kind === "mark") {
       ann.type = "mark";
-      ann.markKind = sel.markKind;
+      ann.markKind = "rect";
       ann.markBox = sel.markBox;
-      ann.startAnchor = sel.startAnchor || "";
-      ann.endAnchor = sel.endAnchor || "";
       ann.areaAnchor = sel.areaAnchor || "";
       ann.selectedText = formatMarkQuote({
         markBox: sel.markBox,
-        markKind: sel.markKind,
+        markKind: "rect",
         order,
-        startAnchor: sel.startAnchor,
-        endAnchor: sel.endAnchor,
         areaAnchor: sel.areaAnchor
       });
     } else {
@@ -3244,14 +3104,8 @@ function highlightAnnotationInContent(id) {
   if (ann.type === "mark" && ann.markBox) {
     const overlay = $("#markOverlay");
     const rect = overlay.getBoundingClientRect();
-    let cx, cy;
-    if (ann.markKind === "arrow") {
-      cx = (ann.markBox.x1 + ann.markBox.x2) / 2;
-      cy = (ann.markBox.y1 + ann.markBox.y2) / 2;
-    } else {
-      cx = ann.markBox.x + ann.markBox.w / 2;
-      cy = ann.markBox.y + ann.markBox.h / 2;
-    }
+    const cx = ann.markBox.x + ann.markBox.w / 2;
+    const cy = ann.markBox.y + ann.markBox.h / 2;
     const scroll = $("#contentScroll");
     const targetY = overlay.offsetTop + cy * rect.height - scroll.clientHeight / 2;
     scroll.scrollTo({ top: Math.max(0, targetY), behavior: "smooth" });
@@ -3376,11 +3230,6 @@ function buildRevisionSummary(ann) {
 function pickAnchor(ann) {
   // mark 类型无选中文本，用反查到的文字片段当锚点
   if (ann.type === "mark" && ann.markBox) {
-    if (ann.markKind === "arrow") {
-      const from = ann.startAnchor || `起点`;
-      const to = ann.endAnchor || `终点`;
-      return `箭头 从@"${from}" → 指向@"${to}"`;
-    }
     const where = ann.areaAnchor || `矩形区域`;
     return `矩形 @"${where}"`;
   }
@@ -3506,7 +3355,7 @@ function init() {
       console.warn("URL fetch failed:", err);
       showConfirm({
         title: "无法直接获取该页面",
-        message: `CORS 策略阻止了直接抓取。可以用「iframe overlay 模式」加载：把页面塞进 iframe 跨域加载，你只能圈选/画箭头标注。`,
+        message: `CORS 策略阻止了直接抓取。可以用「iframe overlay 模式」加载：把页面塞进 iframe 跨域加载，你只能圈选标注。`,
         hint: "如需选中文本标注，请改用「通过 URL 加载 → 查看源代码 → 复制 HTML」路径。",
         okText: "用 iframe 模式加载",
         onOk: () => startSession({ type: "url-iframe", url, title: url })
@@ -3725,7 +3574,6 @@ function init() {
 
   // Mark tools
   $("#btnMarkRectFloat").addEventListener("click", () => setMarkTool("rect"));
-  $("#btnMarkArrowFloat").addEventListener("click", () => setMarkTool("arrow"));
   $("#btnMarkClose").addEventListener("click", () => setMarkTool(null));
   $("#markOverlay").addEventListener("mousedown", onMarkMouseDown);
   document.addEventListener("keydown", e => {
