@@ -2396,9 +2396,12 @@ function onMarkMouseUp(e) {
 function drawMarkDraft() {
   if (!_markDrag) return;
   const d = _markDrag;
+  // d.* 是 overlay 屏幕像素；SVG viewBox 0-1000 拉伸到 overlay 实际尺寸，需换算
+  const sx = 1000 / d.w;
+  const sy = 1000 / d.h;
   const draft = _markTool === "arrow"
-    ? `<line x1="${d.startX}" y1="${d.startY}" x2="${d.currentX}" y2="${d.currentY}" class="mark-draft" marker-end="url(#arrowhead)"/>`
-    : `<rect x="${Math.min(d.startX, d.currentX)}" y="${Math.min(d.startY, d.currentY)}" width="${Math.abs(d.currentX - d.startX)}" height="${Math.abs(d.currentY - d.startY)}" class="mark-draft"/>`;
+    ? `<line x1="${d.startX * sx}" y1="${d.startY * sy}" x2="${d.currentX * sx}" y2="${d.currentY * sy}" class="mark-draft" marker-end="url(#arrowhead)"/>`
+    : `<rect x="${Math.min(d.startX, d.currentX) * sx}" y="${Math.min(d.startY, d.currentY) * sy}" width="${Math.abs(d.currentX - d.startX) * sx}" height="${Math.abs(d.currentY - d.startY) * sy}" class="mark-draft"/>`;
   renderMarkOverlay(draft);
 }
 

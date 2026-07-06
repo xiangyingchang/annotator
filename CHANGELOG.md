@@ -2,6 +2,14 @@
 
 所有版本都按"用户可感知的能力"写，不写重构。
 
+## v3.1 · 2026-07-06
+
+**修复矩形/箭头拖拽预览错位**：拖拽时预览矩形/箭头在屏幕上严重偏离鼠标位置，看起来"圈选区域失败"。
+
+- 根因：`drawMarkDraft` 把 overlay 屏幕像素直接当作 SVG viewBox units，但 SVG viewBox 0-1000 被 `preserveAspectRatio="none"` 拉伸到 overlay 实际宽高比，二者不一致导致预览被错误拉伸
+- 修复：屏幕像素在写入 SVG 前乘以 `1000 / overlayW` 和 `1000 / overlayH` 换算为 viewBox units
+- 副作用：mouseup 计算 markBox 仍用屏幕像素除以 overlayW/H 归一化（保持不变），所以最终 mark 位置和 areaAnchor / endAnchor 都不受影响
+
 ## v3.0 · 2026-07-03
 
 **本地工作区欢迎页清理**：未连接工作区时只显示主按钮"选择工作区目录"；连上后才出现"刷新文件 / 断开"两个次按钮。兼容性提示（Chrome 86+ / File System Access API）从主说明里降级为下方更小更浅的虚线分隔注释。
