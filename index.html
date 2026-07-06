@@ -816,17 +816,35 @@ main {
   background: #fff;
   border: 2px solid #ff5722;
   color: #ff5722;
-  font-size: 12px;
+  font-size: 18px;
   font-weight: 700;
+  line-height: 22px;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   display: flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
   pointer-events: none;
   z-index: 2;
   box-sizing: border-box;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+/* 箭头终点三角：HTML 元素 + CSS border 画三角形，旋转跟随线段方向；不受 SVG viewBox 拉伸 */
+.mark-overlay .mark-arrow-tip {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid #ff5722;
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 2;
+}
+.mark-overlay .mark-arrow-tip.completed {
+  border-bottom-color: #4caf50;
+}
+.mark-overlay .mark-arrow-tip.pending {
+  border-bottom-color: #ff5722;
 }
 .mark-overlay .mark-num-html.completed {
   border-color: #4caf50;
@@ -835,8 +853,10 @@ main {
 .mark-overlay .mark-num-html.pending {
   border-style: dashed;
   border-color: #ff5722;
-  color: #ff5722;
-  background: rgba(255, 87, 34, 0.08);
+  color: #fff;
+  background: #ff5722;
+  font-size: 20px;
+  line-height: 22px;
 }
 .mark-overlay .mark-num-html.flash {
   animation: markNumPulse 1.2s ease-out 2;
@@ -1454,7 +1474,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.6</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.7</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -2465,10 +2485,10 @@ function renderMarkOverlay(draftHtml = "") {
   if (!overlay) return;
   const anns = App.session ? App.session.annotations : [];
   const marks = anns.filter(a => a.type === "mark" && a.markBox);
-  const arrowDefs = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#ff5722"/></marker><marker id="arrowhead-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4caf50"/></marker></defs>`;
+  const arrowDefs = ``;  // 不再用 SVG marker（被 preserveAspectRatio 拉伸变形），改用 HTML 三角形
   const viewBox = `viewBox="0 0 1000 1000" preserveAspectRatio="none"`;
 
-  // 收集所有 mark（含 pending），用于生成 HTML 编号徽章
+  // 收集所有 mark（含 pending），用于生成 HTML 编号徽章和 HTML 箭头
   const allMarks = marks.map(m => ({ ...m, _pending: false }));
   let pendingMark = null;
   if (App.currentSelection && App.currentSelection.kind === "mark" && App.currentSelection.markBox) {
@@ -2476,7 +2496,7 @@ function renderMarkOverlay(draftHtml = "") {
       markKind: App.currentSelection.markKind,
       markBox: App.currentSelection.markBox,
       status: "open",
-      order: "…",
+      order: "+",
       id: "__pending__",
       _pending: true
     };
@@ -2485,7 +2505,7 @@ function renderMarkOverlay(draftHtml = "") {
   const marksSvg = marks.map(markAnnotationToSvg).join("");
   const pendingSvg = pendingMark ? markAnnotationToSvg(pendingMark) : "";
 
-  // HTML 编号徽章：只给箭头标注画（起点圆形），矩形不画（避免遮挡中间文字）
+  // HTML 编号徽章 + HTML 箭头三角：起点圆形 + 终点旋转的三角形，都用 overlay 像素坐标，不受 SVG 拉伸影响
   const rect = overlay.getBoundingClientRect();
   const ow = rect.width || overlay.clientWidth || 1;
   const oh = rect.height || overlay.clientHeight || 1;
@@ -2497,7 +2517,15 @@ function renderMarkOverlay(draftHtml = "") {
     const cls = `mark-num-html${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
     const nx = m.markBox.x1 * ow;
     const ny = m.markBox.y1 * oh;
-    return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`;
+    // 终点 HTML 箭头：根据线段方向旋转
+    const dx = m.markBox.x2 - m.markBox.x1;
+    const dy = m.markBox.y2 - m.markBox.y1;
+    const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+    const ex = m.markBox.x2 * ow;
+    const ey = m.markBox.y2 * oh;
+    const tipCls = `mark-arrow-tip${completed ? " completed" : ""}${pending ? " pending" : ""}`;
+    return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`
+         + `<div class="${tipCls}" style="left:${ex}px;top:${ey}px;transform:translate(-50%,-50%) rotate(${angle}deg)"></div>`;
   }).join("");
 
   overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${pendingSvg}${draftHtml}</svg>${numBadges}`;
@@ -2525,10 +2553,10 @@ function markAnnotationToSvg(m) {
   const arrowCls = `mark-arrow${completed ? " completed" : ""}${pending ? " pending" : ""}`;
   if (isArrow) {
     const { x1, y1, x2, y2 } = m.markBox;
-    // 编号徽章改用 HTML（不受 SVG preserveAspectRatio="none" 拉伸影响）
+    // 编号徽章 + 终点箭头都改用 HTML（不受 SVG preserveAspectRatio="none" 拉伸影响）
     return `<g data-ann-id="${m.id}">
       <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${shapeCls}" fill="none" stroke="none"/>
-      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${arrowCls}" marker-end="url(#${completed ? "arrowhead-done" : "arrowhead"})"/>
+      <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${arrowCls}"/>
     </g>`;
   }
   const { x, y, w, h } = m.markBox;
