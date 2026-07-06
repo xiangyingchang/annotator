@@ -812,14 +812,44 @@ main {
   0%, 100% { stroke-opacity: 1; fill-opacity: 0.12; }
   50% { stroke-opacity: 0.5; fill-opacity: 0.22; }
 }
-.mark-overlay svg .mark-num {
-  fill: white;
-  font-size: 16px;
+/* 编号徽章改为 HTML 渲染：不受 SVG viewBox 拉伸影响，圆形不会变椭圆 */
+.mark-overlay .mark-num-html {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid #ff5722;
+  color: #ff5722;
+  font-size: 12px;
   font-weight: 700;
-  paint-order: stroke;
-  stroke: #ff5722;
-  stroke-width: 4;
-  stroke-linejoin: round;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 2;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.mark-overlay .mark-num-html.completed {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+.mark-overlay .mark-num-html.pending {
+  border-style: dashed;
+  border-color: #ff5722;
+  color: #ff5722;
+  background: rgba(255, 87, 34, 0.08);
+}
+.mark-overlay .mark-num-html.flash {
+  animation: markNumPulse 1.2s ease-out 2;
+}
+@keyframes markNumPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.25); }
 }
 
 .content-scroll {
@@ -1430,7 +1460,7 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.3</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.4</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
@@ -2381,7 +2411,9 @@ function onMarkMouseUp(e) {
   _markDrag = null;
   const dx = d.currentX - d.startX;
   const dy = d.currentY - d.startY;
-  if (Math.hypot(dx, dy) < 8) {
+  // 箭头需要更长（≥30px），否则编号圆形 + 箭头标记会挤成一坨；矩形保持 8px
+  const minLen = _markTool === "arrow" ? 30 : 8;
+  if (Math.hypot(dx, dy) < minLen) {
     renderMarkOverlay();
     return;
   }
@@ -2441,20 +2473,46 @@ function renderMarkOverlay(draftHtml = "") {
   const marks = anns.filter(a => a.type === "mark" && a.markBox);
   const arrowDefs = `<defs><marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#ff5722"/></marker><marker id="arrowhead-done" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#4caf50"/></marker></defs>`;
   const viewBox = `viewBox="0 0 1000 1000" preserveAspectRatio="none"`;
-  const marksSvg = marks.map(markAnnotationToSvg).join("");
-  // 圈选完成但批注尚未保存 → 渲染 pending mark，让框留在页面上
-  let pendingSvg = "";
+
+  // 收集所有 mark（含 pending），用于生成 HTML 编号徽章
+  const allMarks = marks.map(m => ({ ...m, _pending: false }));
+  let pendingMark = null;
   if (App.currentSelection && App.currentSelection.kind === "mark" && App.currentSelection.markBox) {
-    pendingSvg = markAnnotationToSvg({
+    pendingMark = {
       markKind: App.currentSelection.markKind,
       markBox: App.currentSelection.markBox,
       status: "open",
       order: "…",
       id: "__pending__",
       _pending: true
-    });
+    };
+    allMarks.push(pendingMark);
   }
-  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${pendingSvg}${draftHtml}</svg>`;
+  const marksSvg = marks.map(markAnnotationToSvg).join("");
+  const pendingSvg = pendingMark ? markAnnotationToSvg(pendingMark) : "";
+
+  // HTML 编号徽章：用 overlay 像素坐标定位，不受 SVG viewBox 拉伸影响
+  const rect = overlay.getBoundingClientRect();
+  const ow = rect.width || overlay.clientWidth || 1;
+  const oh = rect.height || overlay.clientHeight || 1;
+  const numBadges = allMarks.map(m => {
+    const isArrow = m.markKind === "arrow";
+    let nx, ny;
+    if (isArrow) {
+      nx = m.markBox.x1 * ow;
+      ny = m.markBox.y1 * oh;
+    } else {
+      nx = (m.markBox.x + m.markBox.w / 2) * ow;
+      ny = (m.markBox.y + m.markBox.h / 2) * oh;
+    }
+    const completed = m.status === "resolved";
+    const active = App.activeAnnId === m.id;
+    const pending = m._pending;
+    const cls = `mark-num-html${completed ? " completed" : ""}${active ? " flash" : ""}${pending ? " pending" : ""}`;
+    return `<div class="${cls}" data-ann-id="${m.id}" style="left:${nx}px;top:${ny}px">${m.order}</div>`;
+  }).join("");
+
+  overlay.innerHTML = `<svg ${viewBox}>${arrowDefs}${marksSvg}${pendingSvg}${draftHtml}</svg>${numBadges}`;
 }
 
 // renderContent 用 render.innerHTML = X 会清掉 contentRender 内的 markOverlay，
@@ -2479,17 +2537,15 @@ function markAnnotationToSvg(m) {
   const arrowCls = `mark-arrow${completed ? " completed" : ""}${pending ? " pending" : ""}`;
   if (isArrow) {
     const { x1, y1, x2, y2 } = m.markBox;
+    // 编号徽章改用 HTML（不受 SVG preserveAspectRatio="none" 拉伸影响）
     return `<g data-ann-id="${m.id}">
       <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${shapeCls}" fill="none" stroke="none"/>
       <line x1="${x1*1000}" y1="${y1*1000}" x2="${x2*1000}" y2="${y2*1000}" class="${arrowCls}" marker-end="url(#${completed ? "arrowhead-done" : "arrowhead"})"/>
-      <circle cx="${x1*1000}" cy="${y1*1000}" r="14" class="mark-num"/>
-      <text x="${x1*1000}" y="${y1*1000}" class="mark-num" text-anchor="middle" dominant-baseline="central" stroke="none">${m.order}</text>
     </g>`;
   }
   const { x, y, w, h } = m.markBox;
   return `<g data-ann-id="${m.id}">
     <rect x="${x*1000}" y="${y*1000}" width="${w*1000}" height="${h*1000}" class="${shapeCls}"/>
-    <text x="${(x+w/2)*1000}" y="${(y+h/2)*1000}" class="mark-num" text-anchor="middle" dominant-baseline="central" stroke="none">${m.order}</text>
   </g>`;
 }
 
