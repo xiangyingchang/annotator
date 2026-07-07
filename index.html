@@ -2849,11 +2849,17 @@ function saveAnnotation() {
 }
 
 function deleteAnnotationById(id) {
-  if (!confirm("确认删除此标注？")) return;
-  App.session.annotations = App.session.annotations.filter(a => a.id !== id);
-  reorderAnnotations();
-  saveSession();
-  render();
+  showConfirm({
+    title: "删除标注",
+    message: "确认删除此标注？",
+    okText: "删除",
+    onOk: () => {
+      App.session.annotations = App.session.annotations.filter(a => a.id !== id);
+      reorderAnnotations();
+      saveSession();
+      render();
+    }
+  });
 }
 
 /* ---------- Annotation list rendering ---------- */
