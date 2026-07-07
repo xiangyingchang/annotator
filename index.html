@@ -115,19 +115,6 @@ header .header-meta {
 header .actions {
   display: flex;
   gap: 6px;
-  align-items: center;
-}
-
-.mcp-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-subtle);
-  transition: background 0.3s;
-}
-.mcp-dot.connected {
-  background: var(--success);
 }
 
 button {
@@ -1409,15 +1396,14 @@ main {
 <body>
 <div id="app">
   <header>
-    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v4.0</span></h1>
+    <h1>标注与修订 <span style="font-size:11px;font-weight:500;color:var(--accent);background:var(--accent-bg);padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;letter-spacing:0.02em;">v3.9</span></h1>
     <div class="header-meta" id="headerMeta">未加载内容</div>
     <div class="actions">
       <button id="btnHistory" class="ghost" title="查看历史任务（标注会话列表）">📚 历史 <span id="historyBadge" class="hidden" style="background:var(--accent);color:white;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:3px;"></span></button>
       <button id="btnNew" class="ghost" title="新建会话（不会删除历史）">新建</button>
       <button id="btnImport" class="ghost" title="从 JSON 恢复">导入</button>
       <button id="btnExportJson" class="ghost" title="保存为 JSON 备份">保存</button>
-      <span id="mcpIndicator" class="mcp-dot" title="未连接 MCP server"></span>
-      <button id="btnExport" class="primary" title="推送标注到 AI 并复制修订请求">推送 AI</button>
+      <button id="btnExport" class="primary" title="导出给 AI 的结构化报告">导出给 AI</button>
     </div>
     <input type="file" id="fileImport" accept="application/json,.json" class="hidden">
   </header>
@@ -1702,8 +1688,7 @@ const App = {
   workspaceName: "",
   workspaceFiles: [],
   lastSaveTime: 0,
-  lastBackupTime: 0,
-  mcpConnected: false
+  lastBackupTime: 0
 };
 
 /* ---------- Utilities ---------- */
@@ -1878,114 +1863,6 @@ function md2html(md) {
   return text;
 }
 
-/* ---------- MCP bridge ---------- */
-const MCP_URL = "http://127.0.0.1:43218";
-
-function checkMCPHealth() {
-  fetch(`${MCP_URL}/api/health`, { method: "GET", mode: "cors" })
-    .then(r => r.json())
-    .then(() => {
-      if (!App.mcpConnected) {
-        App.mcpConnected = true;
-        updateMCPIndicator();
-      }
-    })
-    .catch(() => {
-      if (App.mcpConnected) {
-        App.mcpConnected = false;
-        updateMCPIndicator();
-      }
-    });
-}
-
-function updateMCPIndicator() {
-  const dot = $("#mcpIndicator");
-  if (!dot) return;
-  dot.classList.toggle("connected", App.mcpConnected);
-  dot.title = App.mcpConnected ? "已连接 MCP server（AI 可读取标注）" : "未连接 MCP server";
-}
-
-function pushToMCP(silent) {
-  if (!App.session) return;
-  fetch(`${MCP_URL}/api/session`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(App.session)
-  })
-    .then(r => r.json())
-    .then(data => {
-      if (data.ok) {
-        if (!App.mcpConnected) { App.mcpConnected = true; updateMCPIndicator(); }
-        if (!silent) toast(`已推送 ${App.session.annotations.length} 条标注到 AI`, 1800);
-      }
-    })
-    .catch(() => {
-      if (App.mcpConnected) { App.mcpConnected = false; updateMCPIndicator(); }
-      if (!silent) toast("MCP server 未启动，仅本地保存", 2200);
-    });
-}
-
-function buildStructuredExport() {
-  if (!App.session) return "";
-  const anns = App.session.annotations || [];
-  const open = anns.filter(a => a.status === "open");
-  const src = App.session.source || {};
-
-  const lines = [];
-  lines.push(`# 标注修订请求`);
-  lines.push(``);
-  lines.push(`文档来源：${src.title || src.type || "未知"}`);
-  lines.push(`待处理标注：${open.length} 条`);
-  lines.push(``);
-  lines.push(`## 标注列表`);
-  lines.push(``);
-
-  open.forEach(a => {
-    const anchor = a.type === "mark" && a.markBox
-      ? `矩形 @"${a.areaAnchor || "区域"}"`
-      : `"${(a.selectedText || "").slice(0, 20)}"`;
-    lines.push(`### 标注 #${a.order} [${a.type}]`);
-    lines.push(`- 锚点：${anchor}`);
-    if (a.selectedText) lines.push(`- 原文：${a.selectedText}`);
-    if (a.contextBefore) lines.push(`- 前文：${a.contextBefore}`);
-    if (a.contextAfter) lines.push(`- 后文：${a.contextAfter}`);
-    if (a.comment) lines.push(`- 批注：${a.comment}`);
-    if (a.proposedText) lines.push(`- 建议替换为：${a.proposedText}`);
-    if (a.verify) lines.push(`- 验证要求：${a.verify}`);
-    if (a.markBox) lines.push(`- 圈选位置：x=${(a.markBox.x||0).toFixed(2)},y=${(a.markBox.y||0).toFixed(2)},w=${(a.markBox.w||0).toFixed(2)},h=${(a.markBox.h||0).toFixed(2)}`);
-    lines.push(``);
-  });
-
-  lines.push(`## 修订要求`);
-  lines.push(`1. 按标注编号逐条处理`);
-  lines.push(`2. 回复格式："标注 #N：[修订内容]"`);
-  lines.push(`3. 如标注有冲突，说明冲突并给出综合建议`);
-  lines.push(``);
-  lines.push(`## 结构化数据（JSON，AI 可直接消费）`);
-  lines.push('```json');
-  lines.push(JSON.stringify({
-    sessionId: App.session.id,
-    source: { type: src.type, title: src.title || "", url: src.url || "" },
-    stats: { total: anns.length, open: open.length, resolved: anns.length - open.length },
-    annotations: anns.map(a => {
-      const e = {
-        order: a.order, type: a.type, status: a.status,
-        selectedText: a.selectedText || "",
-        comment: a.comment || "",
-        proposedText: a.proposedText || "",
-        verify: a.verify || "",
-        contextBefore: a.contextBefore || "",
-        contextAfter: a.contextAfter || ""
-      };
-      if (a.type === "mark" && a.markBox) { e.markBox = a.markBox; e.areaAnchor = a.areaAnchor || ""; }
-      return e;
-    })
-  }, null, 2));
-  lines.push('```');
-
-  return lines.join('\n');
-}
-
 /* ---------- Persistence ---------- */
 // 旧 loadSession 已被 loadAllSessions/getCurrentSessionId 替代（见上）
 // 保留空函数避免外部引用报错（其实没有外部引用了）
@@ -2004,7 +1881,6 @@ function saveSession() {
     App.lastSaveTime = Date.now();
     updateHeaderMeta();
     scheduleAutoSnapshot();
-    pushToMCP(true); // 静默推送，失败不打扰
   } catch (e) {
     console.error("Save failed", e);
     toast("自动保存失败：" + e.message, 3000);
@@ -2849,17 +2725,11 @@ function saveAnnotation() {
 }
 
 function deleteAnnotationById(id) {
-  showConfirm({
-    title: "删除标注",
-    message: "确认删除此标注？",
-    okText: "删除",
-    onOk: () => {
-      App.session.annotations = App.session.annotations.filter(a => a.id !== id);
-      reorderAnnotations();
-      saveSession();
-      render();
-    }
-  });
+  if (!confirm("确认删除此标注？")) return;
+  App.session.annotations = App.session.annotations.filter(a => a.id !== id);
+  reorderAnnotations();
+  saveSession();
+  render();
 }
 
 /* ---------- Annotation list rendering ---------- */
@@ -3440,10 +3310,6 @@ function parseAIResponse() {
 
 /* ---------- Events ---------- */
 function init() {
-  // MCP bridge health check (每 30s 轮询一次)
-  checkMCPHealth();
-  setInterval(checkMCPHealth, 30000);
-
   // Welcome tabs
   $$("[data-welcome-tab]").forEach(btn => {
     btn.addEventListener("click", () => {
@@ -3608,23 +3474,17 @@ function init() {
     e.target.value = "";
   });
 
-  // 推送 AI = 推送到 MCP server + 复制极简触发语到剪贴板
+  // v2.7 简化：导出给 AI = 直接复制 + toast 提示，不再弹模态框预览
   $("#btnExport").addEventListener("click", async () => {
     if (!App.session || App.session.annotations.length === 0) {
       toast("当前会话还没有标注");
       return;
     }
-    // 推送到 MCP server
-    pushToMCP(false);
-
-    // 复制极简触发语到剪贴板（MCP 连接时）或完整 prompt（未连接时 fallback）
-    const trigger = App.mcpConnected
-      ? "读取我的标注并逐条处理"
-      : buildStructuredExport();
-
+    const text = buildExport();
     const fallbackCopy = () => {
+      // 老浏览器 / 非安全上下文下 navigator.clipboard 可能不可用
       const ta = document.createElement("textarea");
-      ta.value = trigger;
+      ta.value = text;
       ta.style.position = "fixed";
       ta.style.left = "-9999px";
       document.body.appendChild(ta);
@@ -3636,18 +3496,15 @@ function init() {
     };
     let ok = false;
     try {
-      await navigator.clipboard.writeText(trigger);
+      await navigator.clipboard.writeText(text);
       ok = true;
     } catch (_) {
       ok = fallbackCopy();
     }
-
-    if (App.mcpConnected && ok) {
-      toast(`已推送 ${App.session.annotations.length} 条标注 · Cmd+V 粘贴到对话框即可`, 4000);
-    } else if (ok) {
-      toast(`MCP 未连接 · 已复制完整 prompt · Cmd+V 粘贴到对话框`, 3500);
+    if (ok) {
+      toast(`已复制 ${App.session.annotations.length} 条标注到剪贴板，粘贴给 AI`);
     } else {
-      toast("推送失败：MCP 未连接且复制失败", 3000);
+      toast("复制失败，请检查浏览器权限");
     }
   });
 
