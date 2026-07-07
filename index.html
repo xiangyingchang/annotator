@@ -3634,12 +3634,14 @@ function init() {
     } catch (_) {
       ok = fallbackCopy();
     }
-    // 同时推送到 MCP server
+    // 推送到 MCP server
     pushToMCP(false);
-    if (ok) {
-      toast(`已复制修订请求到剪贴板，粘贴给 AI 即可${App.mcpConnected ? "（已同步 MCP）" : ""}`);
+    if (App.mcpConnected) {
+      toast(`已推送 ${App.session.annotations.length} 条标注。在对话框输入「读取标注」让 AI 处理`, 4000);
+    } else if (ok) {
+      toast(`MCP 未连接，已复制 prompt 到剪贴板，粘贴给 AI`, 3000);
     } else {
-      toast("复制失败，但已尝试推送 MCP");
+      toast("推送失败：MCP 未连接且复制失败", 3000);
     }
   });
 
