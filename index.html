@@ -3608,16 +3608,23 @@ function init() {
     e.target.value = "";
   });
 
-  // 推送 AI = 推送到 MCP server + 复制结构化 prompt 到剪贴板
+  // 推送 AI = 推送到 MCP server + 复制极简触发语到剪贴板
   $("#btnExport").addEventListener("click", async () => {
     if (!App.session || App.session.annotations.length === 0) {
       toast("当前会话还没有标注");
       return;
     }
-    const text = buildStructuredExport();
+    // 推送到 MCP server
+    pushToMCP(false);
+
+    // 复制极简触发语到剪贴板（MCP 连接时）或完整 prompt（未连接时 fallback）
+    const trigger = App.mcpConnected
+      ? "读取我的标注并逐条处理"
+      : buildStructuredExport();
+
     const fallbackCopy = () => {
       const ta = document.createElement("textarea");
-      ta.value = text;
+      ta.value = trigger;
       ta.style.position = "fixed";
       ta.style.left = "-9999px";
       document.body.appendChild(ta);
@@ -3629,17 +3636,16 @@ function init() {
     };
     let ok = false;
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(trigger);
       ok = true;
     } catch (_) {
       ok = fallbackCopy();
     }
-    // 推送到 MCP server
-    pushToMCP(false);
-    if (App.mcpConnected) {
-      toast(`已推送 ${App.session.annotations.length} 条标注。在对话框输入「读取标注」让 AI 处理`, 4000);
+
+    if (App.mcpConnected && ok) {
+      toast(`已推送 ${App.session.annotations.length} 条标注 · Cmd+V 粘贴到对话框即可`, 4000);
     } else if (ok) {
-      toast(`MCP 未连接，已复制 prompt 到剪贴板，粘贴给 AI`, 3000);
+      toast(`MCP 未连接 · 已复制完整 prompt · Cmd+V 粘贴到对话框`, 3500);
     } else {
       toast("推送失败：MCP 未连接且复制失败", 3000);
     }
